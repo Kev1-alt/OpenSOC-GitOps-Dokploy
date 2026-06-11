@@ -514,15 +514,29 @@ compose -p <your-project-name> \
 
 > [!NOTE] The `-p` flag controls the Docker project name and therefore the prefix of all named volumes, containers, and networks. Choose a consistent name before deploying — changing it later requires volume migration. Example: `-p opensoc-wazuh` → volumes named `opensoc-wazuh_wazuh-indexer-data-1`.
 
-## 4.5 Configure the Public Domain
+## 4.5 Initial Deploy
+
+Click **Deploy** in the Dokploy UI and wait for the containers to start.
+
+```bash
+# Verify containers are running
+docker ps | grep wazuh
+```
+
+> [!NOTE] Containers may stop or report errors on this first run — this is expected. Docker creates the named volumes before they are initialized. Proceed to domain configuration once the containers are visible.
+
+## 4.6 Configure the Public Domain
+
+> [!IMPORTANT] The domain can only be configured **after** the initial deploy. Dokploy needs the containers to be running to detect available services in the **Service Name** dropdown.
 
 In Dokploy → **Domains → Add Domain**:
 
-```text
-Domain : wazuh.your-domain.com
-Port   : 5601
-HTTPS  : Enabled (automatic Let's Encrypt via Traefik)
-```
+1. **Service Name** → select `wazuh.dashboard` from the dropdown
+2. **Host** → `wazuh.your-domain.com`
+3. **Port** → `5601`
+4. **HTTPS** → Enabled (automatic Let's Encrypt via Traefik)
+
+Then click **Redeploy** to apply the domain configuration.
 
 ---
 
@@ -695,12 +709,12 @@ sudo nano /etc/dokploy/secrets/wazuh.env
 
 ## P1 — Before go-live
 
-|Item|Why|
-|---|---|
-|Encrypted offsite backup of `/etc/dokploy/secrets/`|Secrets are the single point of recovery|
-|SSH access restrictions (key-only, no root login)|Reduces host attack surface|
-|MFA on Dokploy and GitHub|Protects the deployment pipeline|
-|OpenSearch snapshot repository|Enables index-level recovery|
+| Item                                                | Why                                      |
+| --------------------------------------------------- | ---------------------------------------- |
+| Encrypted offsite backup of `/etc/dokploy/secrets/` | Secrets are the single point of recovery |
+| SSH access restrictions (key-only, no root login)   | Reduces host attack surface              |
+| MFA on Dokploy and GitHub                           | Protects the deployment pipeline         |
+| OpenSearch snapshot repository                      | Enables index-level recovery             |
 
 ## P2 — Within 90 days
 
