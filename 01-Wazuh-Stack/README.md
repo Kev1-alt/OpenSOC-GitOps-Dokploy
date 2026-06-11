@@ -162,36 +162,35 @@ Named Docker Volumes (runtime data)  +
 - Open ports: 80 / 443 / 1514 / 1515
 
 ---
-
 ## 📁 Repository Structure
 
 ```text
 OpenSOC-GitOps-Dokploy/
-├── README.md
-├── docs
-│   ├── architecture-decisions-records.md
-│   ├── deployment-guide.md
-│   ├── health-check.md
-│   ├── secret-rotation-guide.md
-│   └── troubleshooting.md
-├── examples
-│   └── wazuh.env.example
-├── scripts
-│   ├── bootstrap.sh
-│   ├── health-check.sh
-│   └── init-certs.sh
-└── wazuh-docker
-    └── multi-node
-        ├── config
-        │   ├── wazuh_dashboard
-        │   │   ├── opensearch_dashboards.yml			← Example — adapt before use
-        │   │   └── wazuh.yml
-        │   └── wazuh_indexer
-        │       ├── internal_users.yml
-        │       ├── wazuh1.indexer.yml
-        │       ├── wazuh2.indexer.yml
-        │       └── wazuh3.indexer.yml
-        └── docker-compose.yml					← Example — adapt before use
+└── 01-Wazuh-Stack/
+    ├── README.md
+    ├── docs/
+    │   ├── deployment-guide.md
+    │   ├── secret-rotation-guide.md
+    │   ├── troubleshooting.md
+    │   ├── health-check.md
+    │   └── architecture-decisions-records.md
+    ├── examples/
+    │   └── wazuh.env.example              ← Template — copy and adapt
+    ├── scripts/
+    │   ├── bootstrap.sh
+    │   ├── health-check.sh
+    │   └── init-certs.sh
+    └── wazuh-docker/
+        ├── docker-compose.yml             ← Example — adapt before use
+        └── config/
+            ├── wazuh_dashboard/
+            │   ├── opensearch_dashboards.yml  ← Example — adapt before use
+            │   └── wazuh.yml
+            └── wazuh_indexer/
+                ├── internal_users.yml
+                ├── wazuh1.indexer.yml
+                ├── wazuh2.indexer.yml
+                └── wazuh3.indexer.yml
 ```
 
 ---
