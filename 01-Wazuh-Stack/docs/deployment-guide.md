@@ -351,7 +351,7 @@ opensearch.hosts:
   - "https://wazuh2.indexer:9200"
   - "https://wazuh3.indexer:9200"
 
-opensearch.ssl.verificationMode: certificate
+opensearch.ssl.verificationMode: full
 opensearch.requestHeadersWhitelist: ["securitytenant","Authorization"]
 
 opensearch_security.multitenancy.enabled: false
@@ -359,7 +359,8 @@ opensearch_security.readonly_mode.roles: ["kibana_read_only"]
 
 # Traefik handles external HTTPS — Dashboard listens on plain HTTP internally
 server.ssl.enabled: false
-
+#server.ssl.key: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem"
+#server.ssl.certificate: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem"
 opensearch.ssl.certificateAuthorities:
   - "/usr/share/wazuh-dashboard/certs/root-ca.pem"
 
@@ -371,7 +372,6 @@ opensearch_security.cookie.ttl: 28800000
 opensearch_security.session.ttl: 28800000
 opensearch_security.session.keepalive: true
 opensearch_security.cookie.secure: true
-opensearch_security.cookie.samesite: "Strict"
 ```
 
 > [!NOTE] This blueprint deploys a single Dashboard instance. For Dashboard-layer HA, see [ADR-005](05-adr.md#adr-005--accepted-architectural-limitations).
