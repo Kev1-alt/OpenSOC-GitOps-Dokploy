@@ -226,8 +226,6 @@ networks:
 
 
 volumes:
-  wazuh-indexer-config:
-  wazuh-certs:
   master-wazuh-api-configuration:
   master-wazuh-etc:
   master-wazuh-logs:
