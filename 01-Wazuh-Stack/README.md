@@ -167,24 +167,45 @@ Named Docker Volumes (runtime data)  +
 
 ```text
 OpenSOC-GitOps-Dokploy/
+├── 01-Wazuh-Stack
+│   ├── README.md
+│   ├── docs
+│   │   ├── architecture-decisions-records.md
+│   │   ├── deployment-guide.md
+│   │   ├── health-check.md
+│   │   ├── secret-rotation-guide.md
+│   │   └── troubleshooting.md
+│   ├── examples
+│   │   └── wazuh.env.example
+│   ├── scripts
+│   │   ├── bootstrap.sh
+│   │   ├── health-check.sh
+│   │   └── init-certs.sh
+│   └── wazuh-docker
+│       └── multi-node
+│           ├── config
+│           │   ├── wazuh_dashboard
+│           │   │   ├── opensearch_dashboards.yml            ← Example — adapt before use
+│           │   │   └── wazuh.yml
+│           │   └── wazuh_indexer
+│           │       ├── internal_users.yml
+│           │       ├── wazuh1.indexer.yml
+│           │       ├── wazuh2.indexer.yml
+│           │       └── wazuh3.indexer.yml
+│           └── docker-compose.yml                           ← Example — adapt before use
+├── 02-Suricata
+│   └── README.md
+├── 03-Shuffle-SOAR
+│   └── README.md
+├── 04-TheHive-Cortex
+│   └── README.md
+├── 05-Scripts-Deployment
+│   └── README.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── LICENSE-DOCS
 ├── README.md
-├── .gitignore
-├── 01-Wazuh-Stack/
-│   └── wazuh-docker/
-│       ├── docker-compose.yml               ← Example — adapt before use
-│       └── config/
-│           ├── wazuh_dashboard/
-│           │   └── opensearch_dashboards.yml  ← Example — adapt before use
-│           └── wazuh_indexer/
-│               ├── wazuh1.indexer.yml
-│               ├── wazuh2.indexer.yml
-│               └── wazuh3.indexer.yml
-└── docs/
-    ├── 01-deployment-guide.md
-    ├── 02-secret-rotation.md
-    ├── 03-troubleshooting.md
-    ├── 04-health-check.md
-    └── 05-adr.md
+└── SECURITY.md
 ```
 
 ---
