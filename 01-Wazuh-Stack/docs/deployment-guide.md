@@ -46,14 +46,14 @@ These examples are intended to be reviewed and adapted by engineers according to
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #      | Document                                       | Description                      | Status           |
-| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
-| 00     | [README](../README.md)                         | Project overview and quick start | ✅ Production     |
-| **01** | **Deployment Guide**                           | **This document**                | **✅ Production** |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md) | Incident diagnosis runbook       | ✅ Production     |
-| 04     | [Health Check Guide](04-health-check.md)       | Post-deployment validation       | ✅ Production     |
-| 05     | [Architecture Decision Records](05-adr.md)     | Design rationale and trade-offs  | ✅ Production     |
+| #      | Document                                                           | Description                      | Status           |
+| ------ | ------------------------------------------------------------------ | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)                                             | Project overview and quick start | ✅ Production     |
+| **01** | **Deployment Guide**                                               | **This document**                | **✅ Production** |
+| 02     | [Secret Rotation Guide](secret-rotation-guide.md)                  | Credentials rotation runbook     | ✅ Production     |
+| 03     | [Troubleshooting Guide](troubleshooting.md)                        | Incident diagnosis runbook       | ✅ Production     |
+| 04     | [Health Check Guide](health-check.md)                              | Post-deployment validation       | ✅ Production     |
+| 05     | [Architecture Decision Records](architecture-decisions-records.md) | Design rationale and trade-offs  | ✅ Production     |
 
 ### Audience
 
@@ -181,11 +181,11 @@ Clone the official Wazuh Docker repository and isolate the multi-node deployment
 ```bash
 git clone https://github.com/wazuh/wazuh-docker.git ~/wazuh-repository
 
-mkdir -p ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/
+mkdir -p ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 
-cp -r \
-  ~/wazuh-repository/multi-node \
-  ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker
+# Copy the contents of multi-node — not the folder itself
+cp -r ~/wazuh-repository/multi-node/* \
+  ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 
 rm -rf ~/wazuh-repository
 
@@ -197,19 +197,16 @@ Expected repository structure:
 
 ```text
 OpenSOC-GitOps-Dokploy/
-├── .gitignore
-├── README.md
 └── 01-Wazuh-Stack/
     └── wazuh-docker/
         ├── docker-compose.yml
         ├── generate-indexer-certs.yml
         └── config/
             ├── wazuh_dashboard/
-            │   └── opensearch_dashboards.yml
-            ├── wazuh_cluster/
-            │   ├── wazuh_manager.conf
-            │   └── wazuh_worker.conf
+            │   ├── opensearch_dashboards.yml
+            │   └── wazuh.yml
             └── wazuh_indexer/
+                ├── internal_users.yml
                 ├── wazuh1.indexer.yml
                 ├── wazuh2.indexer.yml
                 └── wazuh3.indexer.yml
@@ -231,13 +228,13 @@ secrets/
 *.p12
 *.key.pem
 
-# Sensitive Wazuh configurations
+# Generated certificate directory
 config/wazuh_indexer_ssl_certs/
+
+# Sensitive Wazuh configurations
 config/wazuh_indexer/internal_users.yml
 config/wazuh_dashboard/opensearch_dashboards.yml
 config/wazuh_dashboard/wazuh.yml
-config/wazuh_cluster/wazuh_manager.conf
-config/wazuh_cluster/wazuh_worker.conf
 
 # Persistent data & logs
 data/
@@ -304,7 +301,9 @@ sudo chown root:root /etc/dokploy/secrets/wazuh.env
 
 ## Back Up Original Configuration Files
 
-Before modifying any configuration, retain a cold backup:
+Before modifying any configuration, retain a cold backup.
+
+> [!IMPORTANT] Run this step after completing Step 1 — these files only exist once the Wazuh Docker repository has been cloned and copied.
 
 ```bash
 sudo mkdir -p /etc/dokploy/secrets/configs
@@ -314,8 +313,6 @@ cd ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 sudo cp config/wazuh_indexer/internal_users.yml          /etc/dokploy/secrets/configs/
 sudo cp config/wazuh_dashboard/opensearch_dashboards.yml /etc/dokploy/secrets/configs/
 sudo cp config/wazuh_dashboard/wazuh.yml                 /etc/dokploy/secrets/configs/
-sudo cp config/wazuh_cluster/wazuh_manager.conf          /etc/dokploy/secrets/configs/
-sudo cp config/wazuh_cluster/wazuh_worker.conf           /etc/dokploy/secrets/configs/
 ```
 
 > [!WARNING] **Version upgrades — Mandatory checks**
@@ -324,7 +321,7 @@ sudo cp config/wazuh_cluster/wazuh_worker.conf           /etc/dokploy/secrets/co
 > 
 > - Filebeat template compatibility
 > - OpenSearch Security Plugin schema changes
-> - Configuration file changes (`manager.conf`, etc.)
+> - Configuration file changes
 > - Official release notes: https://documentation.wazuh.com/current/release-notes/
 > 
 > **Always test upgrades on a staging environment first.**
@@ -361,6 +358,7 @@ opensearch_security.readonly_mode.roles: ["kibana_read_only"]
 server.ssl.enabled: false
 #server.ssl.key: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem"
 #server.ssl.certificate: "/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem"
+
 opensearch.ssl.certificateAuthorities:
   - "/usr/share/wazuh-dashboard/certs/root-ca.pem"
 
@@ -374,56 +372,61 @@ opensearch_security.session.keepalive: true
 opensearch_security.cookie.secure: true
 ```
 
-> [!NOTE] This blueprint deploys a single Dashboard instance. For Dashboard-layer HA, see [ADR-005](05-adr.md#adr-005--accepted-architectural-limitations).
-
 > [!NOTE] **Session expiry and "Invalid credentials" after logout**
 > 
-> If the Dashboard returns `Invalid credentials` after disconnect/reconnect without any API-side error, the cause is a stale session cookie not properly invalidated client-side. Clear browser cookies for the domain or test in a private window to confirm. The 8-hour TTL configured above prevents this under normal usage patterns.
+> If the Dashboard returns `Invalid credentials` after disconnect/reconnect without any API-side error, the cause is a stale session cookie not properly invalidated client-side. Clear browser cookies for the domain or test in a private window.
+
+> [!NOTE] This blueprint deploys a single Dashboard instance. For Dashboard-layer HA, see [Architecture Decision Records](architecture-decisions-records.md).
 
 ## 3.2 Volume Strategy — Named Volumes for Data, Bind Mounts for Configuration
 
-This blueprint applies a hybrid volume strategy based on the nature of the data being stored. See [ADR-003](05-adr.md#adr-003--hybrid-volume-strategy-named-volumes-for-data-bind-mounts-for-configuration) for the full rationale.
+This blueprint applies a hybrid volume strategy:
 
-**Named Docker volumes** — for all persistent runtime data that must survive container recreation and redeployments:
+- **Named Docker volumes** — persistent runtime data that must survive container recreation
+- **Bind mounts from `./config/`** — certificates and configuration files that require direct host-level editing
+
+> [!IMPORTANT] For the complete `docker-compose.yml` with all volume definitions, service configurations, and bind mount mappings, refer to the example file provided in the repository:
+> 
+> ```text
+> 01-Wazuh-Stack/wazuh-docker/docker-compose.yml  ← adapt before use
+> ```
+> 
+> The sections below document the key architectural decisions applied to that file.
+
+### Named volumes — indexer data
+
+Each indexer node uses a dedicated named volume for runtime data:
 
 ```yaml
+# wazuh1.indexer — 7 mounts (includes admin certs for securityadmin.sh)
 volumes:
-  wazuh-indexer-data-1:
-  wazuh-indexer-data-2:
-  wazuh-indexer-data-3:
-  master-wazuh-logs:
-  master-wazuh-etc:
-  master-filebeat-etc:
-  master-filebeat-var:
-  # ... all runtime state volumes declared at the bottom of docker-compose.yml
+  - wazuh-indexer-data-1:/var/lib/wazuh-indexer
+  - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
+  - ./config/wazuh_indexer_ssl_certs/wazuh1.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.key
+  - ./config/wazuh_indexer_ssl_certs/wazuh1.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.pem
+  - ./config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem
+  - ./config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+  - ./config/wazuh_indexer/wazuh1.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
+  - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
+
+# wazuh2.indexer and wazuh3.indexer — 5 mounts (no admin certs — least privilege)
+volumes:
+  - wazuh-indexer-data-2:/var/lib/wazuh-indexer
+  - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
+  - ./config/wazuh_indexer_ssl_certs/wazuh2.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.key
+  - ./config/wazuh_indexer_ssl_certs/wazuh2.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.pem
+  - ./config/wazuh_indexer/wazuh2.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
+  - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
 ```
 
-**Bind mounts from `./config/`** — for certificates and configuration files that require direct host-level editing during operations (secret rotation, certificate renewal, cluster tuning):
+> [!NOTE] `admin.pem` and `admin-key.pem` are mounted only on `wazuh1.indexer` because `securityadmin.sh` is executed from that node exclusively. Mounting admin credentials on wazuh2 and wazuh3 would violate least privilege.
 
-```yaml
-# Certificates — mounted directly from the working directory
-- ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
-- ./config/wazuh_indexer_ssl_certs/wazuh1.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.pem
-# ...
-
-# Configuration files
-- ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
-- ./config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
-- ./config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
-- ./config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
-```
-
-The `./config/` path is relative to the Docker Compose working directory. Dokploy consistently resolves this to `/etc/dokploy/compose/<APP_ID>/code/` during deployment — no absolute host paths are required.
-
-> [!NOTE] Configuration files mounted via bind mounts are directly editable on the host without any container intermediary. This is intentional — operations such as secret rotation and certificate renewal rely on direct file access. See [Secret Rotation Guide](02-secret-rotation.md) for procedures that depend on this behavior.
+### Named volumes declaration
 
 Declare all named volumes at the bottom of `docker-compose.yml`:
 
 ```yaml
 volumes:
-  wazuh-indexer-config:
-  wazuh-certs:
-
   master-wazuh-api-configuration:
   master-wazuh-etc:
   master-wazuh-logs:
@@ -509,7 +512,7 @@ compose -p <your-project-name> \
   up -d --remove-orphans
 ```
 
-> [!NOTE] The `-p` flag controls the Docker project name and therefore the prefix of all named volumes, containers, and networks. Choose a consistent name before deploying — changing it later requires volume migration. Example: `-p opensoc-wazuh` → volumes named `opensoc-wazuh_wazuh-indexer-data-1`, containers named `opensoc-wazuh-wazuh1.indexer-1`, etc.
+> [!NOTE] The `-p` flag controls the Docker project name and therefore the prefix of all named volumes, containers, and networks. Choose a consistent name before deploying — changing it later requires volume migration. Example: `-p opensoc-wazuh` → volumes named `opensoc-wazuh_wazuh-indexer-data-1`.
 
 ## 4.5 Configure the Public Domain
 
@@ -534,6 +537,8 @@ cd ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 docker compose -f generate-indexer-certs.yml run --rm generator
 ```
 
+Certificates are generated directly into `./config/wazuh_indexer_ssl_certs/`.
+
 Verify that all certificates share the same Certificate Authority — **critical**:
 
 ```bash
@@ -544,21 +549,20 @@ for cert in config/wazuh_indexer_ssl_certs/*.pem; do
   fi
 done
 # All certificates must return: issuer=CN=root-ca
-# A different issuer on any certificate means the trust chain is broken
+# A different issuer means the trust chain is broken
 # and OpenSearch authentication will fail
 ```
 
 ## 5.2 Set Certificate Permissions
 
-Certificates are mounted into the indexer containers via bind mounts from `./config/wazuh_indexer_ssl_certs/`. No volume injection step is required.
+Certificates are mounted into containers via bind mounts from `./config/wazuh_indexer_ssl_certs/`. No volume injection step is required.
 
 **Verify the UID used by the indexer container:**
 
 ```bash
 # Never assume UID 1000 — always verify dynamically
 docker run --rm wazuh/wazuh-indexer:4.14.5 id
-# → uid=1000(wazuh) gid=1000(wazuh) groups=1000(wazuh)
-# Use the UID returned by this command in the chown commands below
+# → uid=1000(wazuh) gid=1000(wazuh)
 ```
 
 **Set ownership and permissions on the host directory:**
@@ -570,15 +574,14 @@ sudo chmod 640 config/wazuh_indexer_ssl_certs/*.pem
 
 > [!WARNING] Incorrect ownership is the most common cause of silent `securityadmin.sh` failures. Files owned by `root:root` without read access for UID 1000 will cause OpenSearch Security initialization to fail without a clear error message.
 
-**Back up certificates and clean the working directory:**
+**Back up certificates:**
 
 ```bash
 sudo cp -r config/wazuh_indexer_ssl_certs/ \
   /etc/dokploy/secrets/certs-backup-$(date +%Y%m%d)/
-
-# Remove from working directory — certificates must not be committed
-rm -rf config/wazuh_indexer_ssl_certs/
 ```
+
+> [!CAUTION] Do **not** delete `config/wazuh_indexer_ssl_certs/` from the working directory. Unlike the named volume approach, certificates are served directly from this directory via bind mounts — removing them will break the stack on next restart.
 
 ## 5.3 Initial Deployment
 
@@ -594,9 +597,7 @@ Containers may stop or report errors on the first run. This is expected — Dock
 > 
 > `securityadmin.sh` is the standard initialization mechanism for Wazuh 4.x / OpenSearch. Check Wazuh release notes on future upgrades — this procedure may evolve.
 
-> [!NOTE] Container names in the commands below use the service hostname (`wazuh1.indexer`). Docker resolves these within the stack network. If running commands from the host outside the stack network, use the full container name: `<your-project-name>-wazuh1.indexer-1`.
-
-Wait for the cluster to form before running the initialization:
+Wait for the cluster to form:
 
 ```bash
 docker logs wazuh1.indexer 2>&1 | grep -E "started|Security|initialized" | tail -5
@@ -620,16 +621,17 @@ Expected output: `Done with success`
 
 > [!WARNING] **Silent failure — Permissions**
 > 
-> If `securityadmin.sh` exits without `Done with success` and without a clear error, the cause is almost always incorrect file ownership on the certificate files.
+> If `securityadmin.sh` exits without `Done with success` and without a clear error, the cause is almost always incorrect file ownership on the certificate bind mount.
 > 
 > ```bash
 > # Verify UID inside the container
 > docker exec wazuh1.indexer id
 > 
-> # Verify certificate ownership — must match the UID above, not root:root
+> # Verify certificate ownership
 > docker exec wazuh1.indexer ls -la /usr/share/wazuh-indexer/config/certs/
+> # → must show 1000:1000, not root:root
 > 
-> # Fix ownership on the host bind mount directory if needed
+> # Fix ownership on the host bind mount directory
 > sudo chown -R 1000:1000 config/wazuh_indexer_ssl_certs/
 > ```
 
@@ -637,9 +639,7 @@ Expected output: `Done with success`
 
 # Step 6 — Post-Deployment Validation
 
-Run a full health check after deployment.
-
-→ See [Health Check Guide](04-health-check.md) for the complete validation procedure.
+→ See [Health Check Guide](health-check.md) for the complete validation procedure.
 
 **Quick cluster validation:**
 
@@ -672,13 +672,10 @@ docker exec wazuh.master env | grep -E "INDEXER_USERNAME|INDEXER_PASSWORD|API_US
 ## Rollback via Git Tag
 
 ```bash
-# List available tags
 git tag -l
 
-# Roll back to a previous tag
 git checkout v4.14.4-prod-20240901
 git push -f origin main
-
 # Then click Deploy in Dokploy
 ```
 
@@ -686,30 +683,21 @@ git push -f origin main
 
 ```bash
 sudo nano /etc/dokploy/secrets/wazuh.env
-
-# Revert:
-# WAZUH_VERSION=4.14.4
-# WAZUH_IMAGE_VERSION=4.14.4
-# FILEBEAT_TEMPLATE_BRANCH=4.14.4
-
+# Revert WAZUH_VERSION, WAZUH_IMAGE_VERSION, FILEBEAT_TEMPLATE_BRANCH
 # Then click Deploy in Dokploy
 ```
 
-> [!CAUTION] A major version rollback may cause OpenSearch index incompatibilities. If the cluster enters `yellow` or `red` state after rollback, an index reset may be required. Always test rollbacks on a staging environment first.
+> [!CAUTION] A major version rollback may cause OpenSearch index incompatibilities. Always test rollbacks on a staging environment first.
 
 ---
 
 # Step 8 — Production Hardening
 
-This blueprint is production-oriented for startups, small teams, and lab environments.
-
-The following hardening steps are recommended before or shortly after go-live.
-
 ## P1 — Before go-live
 
 |Item|Why|
 |---|---|
-|Encrypted offsite backup of `/etc/dokploy/secrets/`|Secrets are the single point of recovery — protect them|
+|Encrypted offsite backup of `/etc/dokploy/secrets/`|Secrets are the single point of recovery|
 |SSH access restrictions (key-only, no root login)|Reduces host attack surface|
 |MFA on Dokploy and GitHub|Protects the deployment pipeline|
 |OpenSearch snapshot repository|Enables index-level recovery|
@@ -724,7 +712,8 @@ The following hardening steps are recommended before or shortly after go-live.
 |Log retention policy|Compliance and storage management|
 |Regular security review of Wazuh rules and agent coverage|Ongoing detection quality|
 
-> For design rationale on accepted limitations of this blueprint, see [Architecture Decision Records](05-adr.md).
+> For design rationale on accepted limitations, see [Architecture Decision Records](architecture-decisions-records.md).
+
 ---
 
 ## Deployment Maturity
@@ -751,5 +740,4 @@ Users are responsible for reviewing, adapting, and validating all configurations
 
 🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt) · 💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
 
-*Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author.*
-*Part of [OpenSOC GitOps Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/[nom-du-fichier.md]`*`_`_
+_Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author._ _Part of [OpenSOC GitOps](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/deployment-guide.md`_
