@@ -1,12 +1,10 @@
 # Health Check Guide — Wazuh Multi-Node Stack
 
-
 |**Version**|1.0|
 |---|---|
 |**Author**|Kevin YAKPOVI|
 |**Last Updated**|June 2026|
-|**Status**|Production|
-
+|**Status**|Published|
 
 ---
 
@@ -32,14 +30,15 @@ This guide is part of the OpenSOC GitOps reference architecture. Container names
 
 Part of the OpenSOC GitOps Documentation Suite.
 
-| #      | Document                                       | Description                      | Status           |
-| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
-| 00     | [README](../README.md)                         | Project overview and quick start | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)     | Full deployment procedure        | ✅ Production     |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md) | Incident diagnosis runbook       | ✅ Production     |
-| **04** | **Health Check Guide**                         | **This document**                | **✅ Production** |
-| 05     | [Architecture Decision Records](05-adr.md)     | Design rationale and trade-offs  | ✅ Production     |
+| #      | Document                                                             | Description                              | Status           |
+| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
+| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
+| **04** | **Health Check Guide**                                               | **This document**                        | **✅ Production** |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ### Intended Audience
 
@@ -88,6 +87,19 @@ Commands and file paths shown throughout this document should be treated as refe
 
 ---
 
+> [!NOTE] **Container addressing**
+> 
+> Commands address containers by their short service name (`wazuh1.indexer`, `wazuh.master`, `wazuh.dashboard`) — these are the container **hostnames**. On the host, Dokploy prefixes the real container names with the project name and a generated suffix (e.g. `soccenter-wazuhstack-a1b2c3-wazuh1.indexer-1`), so `docker exec wazuh1.indexer` will not resolve directly. Resolve the real name once per shell:
+> 
+> ```bash
+> IDX1=$(docker ps --filter "name=wazuh1.indexer" --format '{{.Names}}' | head -1)
+> # then: docker exec "$IDX1" ...
+> ```
+> 
+> Treat the short names as placeholders to adapt to your environment.
+
+---
+
 ## Dependency Chain
 
 Always validate from the bottom of the stack upward. A failure at any layer renders all dependent layers above it unavailable.
@@ -112,6 +124,7 @@ OpenSearch Cluster (9200)  (storage · foundation)
 
 The deployment is considered healthy when all of the following conditions are met:
 
+- Factory/default credentials are rejected (`401`) — **see Check 0**
 - All containers report `Up` status
 - OpenSearch cluster status is `green`
 - All 3 indexer nodes are present
@@ -121,6 +134,44 @@ The deployment is considered healthy when all of the following conditions are me
 - Dashboard returns `HTTP 200` or `302`
 - Traefik reports no TLS, certificate, or routing errors
 - Dashboard UI loads successfully and displays agents and alerts
+
+---
+
+## Check 0 — Default Credentials Guard
+
+**Run this check first, before anything else.** A stack deployed with the public factory credentials shipped by `wazuh-docker` starts cleanly, reports `green`, and logs no error — it looks perfectly healthy while being protected only by published passwords. No other check in this guide detects that condition. This one does.
+
+The factory defaults are public and identical on every default install:
+
+|Account|Factory value|
+|---|---|
+|`admin` (Indexer)|`SecretPassword`|
+|`wazuh-wui` (API)|`MyS3cr37P450r.*-`|
+|`kibanaserver` (Dashboard)|`kibanaserver`|
+
+Each factory credential **must be rejected**. A `200` (or a valid token) is a **critical finding**.
+
+```bash
+# 1. Indexer admin — factory value must return 401
+docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
+  -u admin:SecretPassword \
+  https://localhost:9200/_cluster/health
+# Expected: 401   (200 = factory credential still live → CRITICAL)
+
+# 2. Wazuh API — factory value must return 401
+docker exec wazuh.master curl -k -s -o /dev/null -w "%{http_code}\n" \
+  -u wazuh-wui:MyS3cr37P450r.*- \
+  -X POST https://localhost:55000/security/user/authenticate
+# Expected: 401
+```
+
+| Result             | Interpretation                                     | Action                                                   |
+| ------------------ | -------------------------------------------------- | -------------------------------------------------------- |
+| `401` on all       | Factory credentials are dead                       | ✅ Continue to Check 1                                    |
+| `200` on indexer   | `admin` hash never rotated in `internal_users.yml` | Rotate now — [Secret Rotation §1](02-secret-rotation.md) |
+| `200`/token on API | `wazuh-wui` never rotated                          | Rotate now — [Secret Rotation §2](02-secret-rotation.md) |
+
+> [!CAUTION] A passing `green` cluster with live factory credentials is **not** a healthy deployment. The plaintext half of the credential may have been changed in `wazuh.env` while the bcrypt hash in `internal_users.yml` still holds the factory value — `--env-file` never touches that hash. See [ADR-002 — Scope of `--env-file` injection](05-architecture-decision-records.md).
 
 ---
 
@@ -309,16 +360,17 @@ Verify the following:
 
 ## Quick Troubleshooting Reference
 
-| Symptom                       | Possible Cause                                 | Next Step                                                   |
-| ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
-| HTTP 502 from Traefik         | Dashboard container unavailable                | Check 1 → Check 7                                           |
-| Login failure                 | Credential mismatch                            | See [Secret Rotation Guide](02-secret-rotation.md)          |
-| Empty Dashboard / no alerts   | OpenSearch cluster not ready or Filebeat issue | Check 2 → Check 5                                           |
-| Cluster status yellow         | Missing replica node                           | Check 3                                                     |
-| Cluster status red            | Node or shard allocation failure               | Check 3 → Check 4                                           |
-| Missing alerts                | Filebeat indexing failure                      | Check 5                                                     |
-| Dashboard unreachable         | Traefik routing or certificate issue           | Check 8                                                     |
-| Variables empty in containers | `--env-file` misconfigured                     | See [Troubleshooting Guide — Step 4](03-troubleshooting.md) |
+| Symptom                       | Possible Cause                                 | Next Step                                                          |
+| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
+| Factory password returns 200  | Credential hash never rotated                  | [Secret Rotation Guide](02-secret-rotation.md)                     |
+| HTTP 502 from Traefik         | Dashboard container unavailable                | Check 1 → Check 7                                                  |
+| Login failure                 | Credential mismatch                            | See [Secret Rotation Guide](02-secret-rotation.md)                 |
+| Empty Dashboard / no alerts   | OpenSearch cluster not ready or Filebeat issue | Check 2 → Check 5                                                  |
+| Cluster status yellow         | Missing replica node                           | Check 3                                                            |
+| Cluster status red            | Node or shard allocation failure               | Check 3 → Check 4                                                  |
+| Missing alerts                | Filebeat indexing failure                      | Check 5                                                            |
+| Dashboard unreachable         | Traefik routing or certificate issue           | Check 8                                                            |
+| Variables empty in containers | `--env-file` misconfigured                     | See [Troubleshooting Guide — Case 1 Step 4](03-troubleshooting.md) |
 
 ---
 
@@ -326,37 +378,36 @@ Verify the following:
 
 The OpenSOC GitOps blueprint uses a hybrid storage model:
 
-- Configuration files are stored in Git and mounted through `./config/`
+- Configuration files and certificates are bind-mounted from absolute host paths
 - Runtime data is stored in named Docker volumes
 - Secrets remain external to Git in `/etc/dokploy/secrets/`
 
-| File / Component | Location | Purpose | In Git |
-|------------------|----------|----------|:------:|
-| `wazuh.env` | `/etc/dokploy/secrets/` | Credentials and environment variables | ❌ |
-| `internal_users.yml` | `./config/wazuh_indexer/` | OpenSearch Security users | ❌ |
-| `opensearch_dashboards.yml` | `./config/wazuh_dashboard/` | Dashboard configuration | ✅ |
-| `wazuh.yml` | `./config/wazuh_dashboard/` | Dashboard ↔ API integration | ✅ |
-| `ossec.conf` | `./config/wazuh_cluster/` | Manager cluster configuration | ✅ |
-| TLS certificates | `./config/wazuh_indexer_ssl_certs/` | Internal TLS trust chain | ❌ |
-| `docker-compose.yml` | Repository | Stack blueprint | ✅ |
-| `wazuh*.indexer.yml` | Repository | OpenSearch node configuration | ✅ |
-| OpenSearch data | Named Docker volumes | Cluster runtime data | ❌ |
-| Manager logs | Named Docker volumes | Wazuh runtime data | ❌ |
-| Dashboard runtime data | Named Docker volumes | Dashboard state | ❌ |
+|File / Component|Location|Purpose|In Git|
+|---|---|---|:-:|
+|`wazuh.env`|`/etc/dokploy/secrets/`|Credentials and environment variables|❌|
+|`internal_users.yml`|`config/wazuh_indexer/` (bind mount)|OpenSearch Security users (bcrypt hashes)|❌|
+|`opensearch_dashboards.yml`|`config/wazuh_dashboard/` (bind mount)|Dashboard configuration|✅|
+|`wazuh.yml`|`config/wazuh_dashboard/` (bind mount)|Dashboard ↔ API integration|✅|
+|`ossec.conf`|`config/wazuh_cluster/` (bind mount)|Manager cluster configuration|✅|
+|TLS certificates|`config/wazuh_indexer_ssl_certs/` (bind mount)|Internal TLS trust chain|❌|
+|`docker-compose.yml`|Repository|Stack blueprint|✅|
+|`wazuh*.indexer.yml`|Repository|OpenSearch node configuration|✅|
+|OpenSearch data|Named Docker volumes|Cluster runtime data|❌|
+|Manager logs|Named Docker volumes|Wazuh runtime data|❌|
+|Dashboard runtime data|Named Docker volumes|Dashboard state|❌|
 
 > [!IMPORTANT]
->
-> Configuration files under `./config/` are intentionally bind-mounted to simplify operational tasks such as certificate renewal, secret rotation, and cluster tuning.
->
+> 
+> Configuration files and certificates are intentionally bind-mounted to simplify operational tasks such as certificate renewal, secret rotation, and cluster tuning.
+> 
 > Runtime data remains stored in named Docker volumes and should never be modified directly.
-
 
 ---
 
-© 2026 **Kevin YAKPOVI** | Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
 
-🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt) · 💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
+OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 
-*Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author.*
-*Part of [OpenSOC GitOps Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/[nom-du-fichier.md]`*`_`_
+Documentation licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). Source code and infrastructure examples licensed under Apache License 2.0.
 
+This document is part of the OpenSOC GitOps Documentation Suite.

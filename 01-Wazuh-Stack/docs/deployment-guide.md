@@ -1,12 +1,20 @@
 # Deployment Guide — Wazuh Multi-Node Stack with Dokploy & Traefik
 
-|**Version**|1.0|
+|**Version**|1.0 — Reference Blueprint|
 |---|---|
 |**Author**|Kevin YAKPOVI|
 |**Last Updated**|June 2026|
-|**Status**|Production|
+|**Status**|Published|
 
 ---
+
+> [!IMPORTANT]
+> 
+> This document describes the v1 Reference Blueprint based on absolute host paths.
+> 
+> It was intentionally designed for transparency, troubleshooting simplicity, and learning purposes.
+> 
+> A future v2 blueprint will introduce bootstrap-based path abstraction for improved portability.
 
 ## Document Purpose
 
@@ -20,7 +28,6 @@ The objective is to provide a reproducible reference implementation that enginee
 - Separate secrets from source code
 - Improve deployment reproducibility across environments
 - Simplify maintenance and upgrades
-- Reduce dependency on host-specific filesystem paths
 
 ### Blueprint Approach
 
@@ -46,14 +53,15 @@ These examples are intended to be reviewed and adapted by engineers according to
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #      | Document                                                           | Description                      | Status           |
-| ------ | ------------------------------------------------------------------ | -------------------------------- | ---------------- |
-| 00     | [README](../README.md)                                             | Project overview and quick start | ✅ Production     |
-| **01** | **Deployment Guide**                                               | **This document**                | **✅ Production** |
-| 02     | [Secret Rotation Guide](secret-rotation-guide.md)                  | Credentials rotation runbook     | ✅ Production     |
-| 03     | [Troubleshooting Guide](troubleshooting.md)                        | Incident diagnosis runbook       | ✅ Production     |
-| 04     | [Health Check Guide](health-check.md)                              | Post-deployment validation       | ✅ Production     |
-| 05     | [Architecture Decision Records](architecture-decisions-records.md) | Design rationale and trade-offs  | ✅ Production     |
+| #      | Document                                                             | Description                              | Status           |
+| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
+| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| **01** | **Deployment Guide**                                                 | **This document**                        | **✅ Production** |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
+| 04     | [Health Check Guide](04-health-check.md)                             | Post-deployment validation               | ✅ Production     |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ### Audience
 
@@ -80,6 +88,42 @@ This deployment intentionally keeps secrets outside the Git repository.
 - Any file from `/etc/dokploy/secrets/`
 
 Always verify file permissions and ownership before running any command that touches secrets or certificates. Do not expose `/etc/dokploy/secrets/` over unencrypted backups or shared snapshots.
+
+---
+
+## Reference Environment
+
+This guide documents the environment used to validate the OpenSOC GitOps blueprint. All commands use the reference paths shown below.
+
+**Adapt every path, domain, project name, and credential to your own environment before executing any command.**
+
+|Variable|Reference value|Description|
+|---|---|---|
+|Repository root|`/home/user/OpenSOC-GitOps-Dokploy`|Location of the cloned repository on the host|
+|Docker project name|`soccenter-wazuhstack`|Value passed to `-p` in the Run Command|
+|Secrets path|`/etc/dokploy/secrets/`|Permanent secrets storage — not in Git|
+|Dashboard domain|`wazuh.your-domain.com`|Public FQDN for the Wazuh Dashboard|
+
+Examples of alternative repository roots:
+
+```text
+/opt/opensoc/
+/srv/security/opensoc/
+/data/git/opensoc/
+```
+
+All commands throughout this guide that reference `/home/user/OpenSOC-GitOps-Dokploy` should be replaced with the actual path used in your environment.
+
+> [!NOTE] **Container addressing**
+> 
+> Commands in this guide address containers by their short service name (`wazuh1.indexer`, `wazuh.master`, `wazuh.dashboard`). These are the container **hostnames**. On the host, Dokploy prefixes the actual container names with the project name and a generated suffix (e.g. `soccenter-wazuhstack-a1b2c3-wazuh1.indexer-1`), so `docker exec wazuh1.indexer` will not resolve directly. Resolve the real name once per shell:
+> 
+> ```bash
+> IDX1=$(docker ps --filter "name=wazuh1.indexer" --format '{{.Names}}' | head -1)
+> # then: docker exec "$IDX1" ...
+> ```
+> 
+> Treat the short names below as placeholders, the same way `<project-name>` and `wazuh.your-domain.com` are.
 
 ---
 
@@ -151,7 +195,7 @@ GitHub Repository
 Dokploy Git Sync
         │
         ▼
-docker compose --env-file
+dokploy command --env-file
         │
         ▼
 /etc/dokploy/secrets/wazuh.env
@@ -161,12 +205,12 @@ Wazuh Multi-Node Cluster
         │
         ▼
 Named Docker Volumes (runtime data)
-Bind Mounts ./config/ (certificates & configuration)
+Absolute host paths /home/user/.../ (certificates & configuration)
 ```
 
 ### Core Principles
 
-- Hybrid volume strategy — named volumes for data, bind mounts for configuration
+- Hybrid volume strategy — named volumes for runtime data, absolute bind mounts for configuration
 - Infrastructure as Code — all configuration tracked in Git
 - Separation of Secrets and Source Code
 - Least Privilege
@@ -205,8 +249,11 @@ OpenSOC-GitOps-Dokploy/
             ├── wazuh_dashboard/
             │   ├── opensearch_dashboards.yml
             │   └── wazuh.yml
+            ├── wazuh_cluster/
+            │   ├── wazuh_manager.conf
+            │   └── wazuh_worker.conf
             └── wazuh_indexer/
-                ├── internal_users.yml
+                ├── internal_users.yml         # git-ignored (real bcrypt hashes — local only)
                 ├── wazuh1.indexer.yml
                 ├── wazuh2.indexer.yml
                 └── wazuh3.indexer.yml
@@ -230,11 +277,10 @@ secrets/
 
 # Generated certificate directory
 config/wazuh_indexer_ssl_certs/
-
-# Sensitive Wazuh configurations
+**/config/wazuh_manager_certs/
+**/config/wazuh_dashboard_certs/
+# internal_users.yml — real bcrypt hashes must never be committed
 config/wazuh_indexer/internal_users.yml
-config/wazuh_dashboard/opensearch_dashboards.yml
-config/wazuh_dashboard/wazuh.yml
 
 # Persistent data & logs
 data/
@@ -249,11 +295,15 @@ wazuh-data*/
 
 ## Create the External Docker Network
 
+Dokploy normally creates `dokploy-network` during its own installation. The command below is a safety net: it creates the network only if it does not already exist, and the `|| true` makes it harmless to run when the network is already present.
+
 ```bash
 docker network create dokploy-network || true
 ```
 
-## Create a Persistent Secrets File
+> [!NOTE] If Dokploy is already installed and running, this network almost certainly exists — running the command will simply report that and continue. Do not delete this network during teardown: it is shared by Dokploy and by any other module deployed on the same host.
+
+## 2.1 Create the Secrets File
 
 ```bash
 sudo mkdir -p /etc/dokploy/secrets
@@ -261,7 +311,7 @@ sudo chmod 700 /etc/dokploy/secrets
 sudo nano /etc/dokploy/secrets/wazuh.env
 ```
 
-> [!CAUTION] Replace all values between `< >` with your own values before saving. **Never commit this file.**
+> [!CAUTION] Replace all values between `< >` with your own values before saving in case of change (see [Secret Rotation Guide](02-secret-rotation.md)). **Never commit this file.**
 
 ```env
 # ============================================================
@@ -277,14 +327,14 @@ WAZUH_UI_REVISION=1
 # ============================================================
 # CREDENTIALS — Never commit these values
 # ============================================================
+# Wazuh default value for first deployment
+
 INDEXER_USERNAME=admin
-INDEXER_PASSWORD=<STRONG_PASSWORD_MIN_16_CHARS>
-
+INDEXER_PASSWORD=SecretPassword
 API_USERNAME=wazuh-wui
-API_PASSWORD=<STRONG_PASSWORD_MIN_16_CHARS>
-
+API_PASSWORD=MyS3cr37P450r.*-
 DASHBOARD_USERNAME=kibanaserver
-DASHBOARD_PASSWORD=<STRONG_PASSWORD_MIN_16_CHARS>
+DASHBOARD_PASSWORD=kibanaserver
 
 # ============================================================
 # NETWORK
@@ -299,20 +349,59 @@ sudo chmod 600 /etc/dokploy/secrets/wazuh.env
 sudo chown root:root /etc/dokploy/secrets/wazuh.env
 ```
 
-## Back Up Original Configuration Files
+> [!CAUTION] **Factory credentials are a silent failure mode**
+> 
+> The values shown above (`SecretPassword`, `MyS3cr37P450r.*-`, `kibanaserver`) are the **default factory credentials** shipped by the official `wazuh-docker` project. They are published and identical on every default install — treat them as **public**.
+> 
+> A stack deployed with these values **starts cleanly, reports `green`, and logs no error**. Nothing in the logs signals that the cluster is protected only by well-known passwords. This is the single most dangerous failure mode of this deployment because it looks healthy.
+> 
+> These defaults are acceptable **only** for the very first bring-up, to validate that the stack assembles. Before the Dashboard is ever exposed through Traefik, rotate **all three** credentials to strong unique values:
+> 
+> - `INDEXER_PASSWORD` (replaces `SecretPassword`)
+> - `API_PASSWORD` (replaces `MyS3cr37P450r.*-`)
+> - `DASHBOARD_PASSWORD` (replaces `kibanaserver`)
+> 
+> Rotation is not a single-file edit: each password has a **plaintext half** (injected from `wazuh.env`) and a **bcrypt-hash half** (in `internal_users.yml`, applied via `securityadmin.sh`). Changing only `wazuh.env` leaves the factory hash live. Follow the full procedure in the [Secret Rotation Guide](02-secret-rotation.md), then confirm with the Default Credentials Guard in the [Health Check Guide](04-health-check.md) — `admin:SecretPassword` must return `401`.
 
-Before modifying any configuration, retain a cold backup.
+> [!NOTE] **No hash generation is required for the initial deploy**
+> 
+> The `internal_users.yml` shipped by the official `wazuh-docker` repository already contains the **factory bcrypt hashes** matching the factory passwords above. For the first bring-up you deploy this file as-is — there is nothing to generate. Hash generation (`hash.sh`) becomes necessary only when you change a password, because the hash half must then be regenerated to match. That procedure lives in the [Secret Rotation Guide](02-secret-rotation.md), which is the single place where credential changes — plaintext and hash together — are documented.
 
-> [!IMPORTANT] Run this step after completing Step 1 — these files only exist once the Wazuh Docker repository has been cloned and copied.
+## 2.2 Environment File Precedence — `wazuh.env` Is the Single Source of Truth
+
+This deployment loads credentials exclusively through `--env-file /etc/dokploy/secrets/wazuh.env` in the Run Command (see §5.3). That file is the single source of truth for all runtime passwords.
+
+> [!IMPORTANT] **Keep the working-directory `.env` empty or absent**
+> 
+> Docker Compose automatically reads a `.env` file located in the working directory (here `/home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/.env`) if one is present. Compose variable precedence is:
+> 
+> ```text
+> --env-file (explicit)   >   working-directory .env (implicit)   >   shell environment
+> ```
+> 
+> Because `--env-file` wins, an out-of-date working-directory `.env` will **not** override `wazuh.env` for variable interpolation. However, a stale `.env` left in the working directory is still a trap: it is easy to edit the wrong file during a later rotation and believe a credential changed when it did not.
+> 
+> **Reference rule for this blueprint:** keep the working-directory `.env` empty or absent, and treat `/etc/dokploy/secrets/wazuh.env` as the only file you ever edit for credentials.
+> 
+> ```bash
+> # Verify no stale .env shadows the secrets file
+> ls -la /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/.env 2>/dev/null \
+>   && echo "WARNING: a working-dir .env exists — ensure it is empty or remove it"
+> ```
+
+> [!NOTE] If you previously relied on a working-directory `.env` and see `invalid username or password` at the Dashboard despite a running stack, the cause is almost always credential drift between that file and `wazuh.env`. Consolidate onto `wazuh.env` and redeploy. Credential rotation is covered end-to-end in the [Secret Rotation Guide](02-secret-rotation.md).
+
+## 2.3 Back Up Original Configuration Files
 
 ```bash
 sudo mkdir -p /etc/dokploy/secrets/configs
 
-cd ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
+cd /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 
-sudo cp config/wazuh_indexer/internal_users.yml          /etc/dokploy/secrets/configs/
 sudo cp config/wazuh_dashboard/opensearch_dashboards.yml /etc/dokploy/secrets/configs/
 sudo cp config/wazuh_dashboard/wazuh.yml                 /etc/dokploy/secrets/configs/
+sudo cp config/wazuh_cluster/wazuh_manager.conf          /etc/dokploy/secrets/configs/
+sudo cp config/wazuh_cluster/wazuh_worker.conf           /etc/dokploy/secrets/configs/
 ```
 
 > [!WARNING] **Version upgrades — Mandatory checks**
@@ -376,50 +465,91 @@ opensearch_security.cookie.secure: true
 > 
 > If the Dashboard returns `Invalid credentials` after disconnect/reconnect without any API-side error, the cause is a stale session cookie not properly invalidated client-side. Clear browser cookies for the domain or test in a private window.
 
-> [!NOTE] This blueprint deploys a single Dashboard instance. For Dashboard-layer HA, see [Architecture Decision Records](architecture-decisions-records.md).
+> [!NOTE] This blueprint deploys a single Dashboard instance. For Dashboard-layer HA, see [Architecture Decision Records](05-architecture-decision-records.md).
 
-## 3.2 Volume Strategy — Named Volumes for Data, Bind Mounts for Configuration
+## 3.2 Volume Strategy — Named Volumes for Data, Absolute Bind Mounts for Configuration
 
 This blueprint applies a hybrid volume strategy:
 
 - **Named Docker volumes** — persistent runtime data that must survive container recreation
-- **Bind mounts from `./config/`** — certificates and configuration files that require direct host-level editing
+- **Absolute bind mounts** — certificates and configuration files requiring direct host-level editing
 
-> [!IMPORTANT] For the complete `docker-compose.yml` with all volume definitions, service configurations, and bind mount mappings, refer to the example file provided in the repository:
+### Why absolute paths instead of relative paths
+
+The official Wazuh Docker compose uses relative paths (`./config/...`), which work when `docker compose` is run directly from the compose file directory.
+
+**Dokploy does not run `docker compose` from the compose file directory**, which causes relative paths to fail with:
+
+```
+mount src=...: not a directory
+```
+
+> [!WARNING] **Known failure mode**
 > 
-> ```text
-> 01-Wazuh-Stack/wazuh-docker/docker-compose.yml  ← adapt before use
+> If the host path does not exist or Docker interprets a file path as a directory, the stack will fail with:
+> 
+> ```
+> not a directory: Are you trying to mount a directory onto a file
 > ```
 > 
-> The sections below document the key architectural decisions applied to that file.
+> This typically occurs when:
+> 
+> - The path in the compose file does not exist on the host
+> - Dokploy regenerates the service path (APP_ID change)
+> - The repository is re-cloned to a different location
+> 
+> Always verify that all bind mount source paths exist on the host before deploying.
 
-### Named volumes — indexer data
-
-Each indexer node uses a dedicated named volume for runtime data:
+### Indexer volume mounts
 
 ```yaml
-# wazuh1.indexer — 7 mounts (includes admin certs for securityadmin.sh)
+# wazuh1.indexer — admin certs included for securityadmin.sh
 volumes:
   - wazuh-indexer-data-1:/var/lib/wazuh-indexer
-  - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
-  - ./config/wazuh_indexer_ssl_certs/wazuh1.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.key
-  - ./config/wazuh_indexer_ssl_certs/wazuh1.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.pem
-  - ./config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem
-  - ./config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem
-  - ./config/wazuh_indexer/wazuh1.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
-  - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh1.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.key
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh1.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh1.indexer.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer/wazuh1.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
 
-# wazuh2.indexer and wazuh3.indexer — 5 mounts (no admin certs — least privilege)
+# wazuh2.indexer and wazuh3.indexer — no admin certs (least privilege)
 volumes:
   - wazuh-indexer-data-2:/var/lib/wazuh-indexer
-  - ./config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
-  - ./config/wazuh_indexer_ssl_certs/wazuh2.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.key
-  - ./config/wazuh_indexer_ssl_certs/wazuh2.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.pem
-  - ./config/wazuh_indexer/wazuh2.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
-  - ./config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh2.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.key
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh2.indexer.pem:/usr/share/wazuh-indexer/config/certs/wazuh2.indexer.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer/wazuh2.indexer.yml:/usr/share/wazuh-indexer/config/opensearch.yml
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer/internal_users.yml:/usr/share/wazuh-indexer/config/opensearch-security/internal_users.yml
 ```
 
 > [!NOTE] `admin.pem` and `admin-key.pem` are mounted only on `wazuh1.indexer` because `securityadmin.sh` is executed from that node exclusively. Mounting admin credentials on wazuh2 and wazuh3 would violate least privilege.
+
+### Manager and Worker volume mounts
+
+```yaml
+# wazuh.master and wazuh.worker — SSL certs for Filebeat
+volumes:
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.master.pem:/etc/ssl/filebeat.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.master-key.pem:/etc/ssl/filebeat.key
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+```
+
+### Dashboard volume mounts
+
+```yaml
+# wazuh.dashboard
+volumes:
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/certs/wazuh-dashboard-key.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca.pem:/usr/share/wazuh-dashboard/certs/root-ca.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_dashboard/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_dashboard/wazuh.yml:/usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+  - wazuh-dashboard-config:/usr/share/wazuh-dashboard/data/wazuh/config
+  - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
+```
 
 ### Named volumes declaration
 
@@ -459,93 +589,14 @@ volumes:
   wazuh-dashboard-custom:
 ```
 
----
+## Check other modifications like password secrets in the docker-compose model
 
-# Step 4 — Git Synchronization and Dokploy Configuration
+# Step 4 — Certificate Generation and Permissions
 
-## 4.1 Push the Repository to GitHub
-
-```bash
-cd ~/OpenSOC-GitOps-Dokploy
-
-git add .
-git commit -m "deploy: wazuh multi-node blueprint — named volumes, external secrets"
-
-git remote add origin <YOUR_GITHUB_REPOSITORY_URL>
-git branch -M main
-git push -u origin main
-
-# Create a deployment tag before every deploy — enables clean rollback
-git tag v4.14.5-prod-$(date +%Y%m%d)
-git push origin --tags
-```
-
-## 4.2 Create the Application in Dokploy
-
-1. Create a new project — **Wazuh-Stack**
-2. Add a **Docker Compose** service
-3. Connect the GitHub repository
-4. Set the Compose path:
-
-```text
-./01-Wazuh-Stack/wazuh-docker/docker-compose.yml
-```
-
-## 4.3 Environment Variable Loading Strategy
-
-> [!IMPORTANT] **Why `--env-file` in the Run Command rather than `env_file` in `docker-compose.yml`**
-> 
-> Passing `--env-file` via the Run Command ensures that all variables are fully resolved by Docker Compose **before** Wazuh and OpenSearch entrypoint scripts execute.
-> 
-> When `env_file` is defined inside `docker-compose.yml`, variables may not be parsed in time for internal OpenSearch and Wazuh configuration scripts — a common cause of silent initialization failures in multi-node clusters.
-> 
-> The Run Command method is therefore the reference pattern for this deployment.
-
-## 4.4 Configure the Run Command
-
-In Dokploy → **Advanced → Run Command**:
+## 4.1 Generate Certificates
 
 ```bash
-compose -p <your-project-name> \
-  --env-file /etc/dokploy/secrets/wazuh.env \
-  -f ./01-Wazuh-Stack/wazuh-docker/docker-compose.yml \
-  up -d --remove-orphans
-```
-
-> [!NOTE] The `-p` flag controls the Docker project name and therefore the prefix of all named volumes, containers, and networks. Choose a consistent name before deploying — changing it later requires volume migration. Example: `-p opensoc-wazuh` → volumes named `opensoc-wazuh_wazuh-indexer-data-1`.
-
-## 4.5 Initial Deploy
-
-Click **Deploy** in the Dokploy UI and wait for the containers to start.
-
-```bash
-# Verify containers are running
-docker ps | grep wazuh
-```
-
-> [!NOTE] Containers may stop or report errors on this first run — this is expected. Docker creates the named volumes before they are initialized. Proceed to domain configuration once the containers are visible.
-
-## 4.6 Configure the Public Domain
-
-> [!IMPORTANT] The domain can only be configured **after** the initial deploy. Dokploy needs the containers to be running to detect available services in the **Service Name** dropdown.
-
-In Dokploy → **Domains → Add Domain**:
-
-1. **Service Name** → select `wazuh.dashboard` from the dropdown
-2. **Host** → `wazuh.your-domain.com`
-3. **Port** → `5601`
-4. **HTTPS** → Enabled (automatic Let's Encrypt via Traefik)
-
-Then click **Redeploy** to apply the domain configuration.
-
----
-
-# Step 5 — Certificate Generation and Permissions
-
-## 5.1 Generate Certificates
-
-```bash
-cd ~/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
+cd /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 
 # Generate certificates using the official temporary container
 docker compose -f generate-indexer-certs.yml run --rm generator
@@ -567,9 +618,9 @@ done
 # and OpenSearch authentication will fail
 ```
 
-## 5.2 Set Certificate Permissions
+## 4.2 Set Certificate Permissions
 
-Certificates are mounted into containers via bind mounts from `./config/wazuh_indexer_ssl_certs/`. No volume injection step is required.
+Certificates are mounted into containers via bind mounts from the host directory. No volume injection step is required.
 
 **Verify the UID used by the indexer container:**
 
@@ -579,11 +630,14 @@ docker run --rm wazuh/wazuh-indexer:4.14.5 id
 # → uid=1000(wazuh) gid=1000(wazuh)
 ```
 
-**Set ownership and permissions on the host directory:**
+**Set ownership and permissions:**
 
 ```bash
-sudo chown -R 1000:1000 config/wazuh_indexer_ssl_certs/
-sudo chmod 640 config/wazuh_indexer_ssl_certs/*.pem
+sudo chown -R 1000:1000 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
+
+sudo chmod 640 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/*.pem
 ```
 
 > [!WARNING] Incorrect ownership is the most common cause of silent `securityadmin.sh` failures. Files owned by `root:root` without read access for UID 1000 will cause OpenSearch Security initialization to fail without a clear error message.
@@ -591,25 +645,119 @@ sudo chmod 640 config/wazuh_indexer_ssl_certs/*.pem
 **Back up certificates:**
 
 ```bash
-sudo cp -r config/wazuh_indexer_ssl_certs/ \
+sudo cp -r \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/ \
   /etc/dokploy/secrets/certs-backup-$(date +%Y%m%d)/
 ```
 
-> [!CAUTION] Do **not** delete `config/wazuh_indexer_ssl_certs/` from the working directory. Unlike the named volume approach, certificates are served directly from this directory via bind mounts — removing them will break the stack on next restart.
+> [!CAUTION] Do **not** delete `config/wazuh_indexer_ssl_certs/` from the working directory. Certificates are served directly from this directory via bind mounts — removing them will break the stack on next restart.
 
-## 5.3 Initial Deployment
+---
 
-Click **Deploy** in the Dokploy UI.
+# Step 5 — Git Synchronization and Dokploy Configuration
 
-Containers may stop or report errors on the first run. This is expected — Docker creates the named volumes before they are initialized.
+> [!CAUTION] **Certificates must already exist on the host before deploying**
+> 
+> Do not start this step until Step 4 has generated every `.pem` into `config/wazuh_indexer_ssl_certs/`. If you deploy first, Docker finds the bind-mount source paths missing and **creates them as empty directories** — `admin.pem`, `root-ca.pem`, and the rest become folders instead of files. The mount then "succeeds" onto a directory, nothing can write the real file over it, and the stack fails with `not a directory: Are you trying to mount a directory onto a file`. This is why certificate generation (Step 4) precedes deployment, matching the official Wazuh documentation order.
+> 
+> ```bash
+> # Confirm each cert is a FILE, not a directory, before deploying
+> for f in config/wazuh_indexer_ssl_certs/*.pem; do
+>   [ -f "$f" ] && echo "OK file: $f" || echo "PROBLEM (missing or dir): $f"
+> done
+> ```
 
-## 5.4 Initialize the OpenSearch Security Plugin
+## 5.1 Push the Repository to GitHub
+
+```bash
+cd ~/OpenSOC-GitOps-Dokploy
+
+git add .
+git commit -m "deploy: wazuh multi-node blueprint — named volumes, external secrets"
+
+git remote add origin <YOUR_GITHUB_REPOSITORY_URL>
+git branch -M main
+git push -u origin main
+
+# Create a deployment tag before every deploy — enables clean rollback
+git tag v4.14.5-prod-$(date +%Y%m%d)
+git push origin --tags
+```
+
+## 5.2 Create the Application in Dokploy
+
+1. Create a new project — **Wazuh-Stack**
+2. Add a **Docker Compose** service
+3. Connect the GitHub repository
+4. Set the Compose path:
+
+```text
+./01-Wazuh-Stack/wazuh-docker/docker-compose.yml
+```
+
+## 5.3 Environment Variable Loading Strategy
+
+> [!IMPORTANT] **Why `--env-file` in the Run Command rather than `env_file` in `docker-compose.yml`**
+> 
+> Passing `--env-file` via the Run Command ensures that all variables are fully resolved by Docker Compose **before** Wazuh and OpenSearch entrypoint scripts execute.
+> 
+> When `env_file` is defined inside `docker-compose.yml`, variables may not be parsed in time for internal OpenSearch and Wazuh configuration scripts — a common cause of silent initialization failures in multi-node clusters.
+> 
+> The Run Command method is therefore the reference pattern for this deployment.
+
+### Scope of `--env-file` injection
+
+`--env-file` only resolves `${VAR}` references that appear in a service's `environment:` block in `docker-compose.yml`. It does **not** reach into bind-mounted configuration files (`opensearch_dashboards.yml`, `wazuh.yml`, `internal_users.yml`) — those carry literal values or bcrypt hashes that must be edited directly on the host.
+
+|Component|What `--env-file` drives|Literal / hash half (not driven by `--env-file`)|
+|---|---|---|
+|`wazuh.master` / `wazuh.worker`|`${INDEXER_*}`, `${API_*}` referenced in `environment:` — **direct**|—|
+|`wazuh.dashboard`|`${API_PASSWORD}` (→ `wazuh-wui`) and `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:` — **direct**|bcrypt hash of `kibanaserver` in `internal_users.yml`|
+|`wazuh1/2/3.indexer`|nothing|all credentials via `internal_users.yml` + `securityadmin.sh`|
+
+> [!IMPORTANT] **The invariant behind the factory-credentials trap**
+> 
+> Every OpenSearch credential has two halves: a **plaintext half** injected at runtime (driven by `--env-file`) and a **bcrypt-hash half** stored in `internal_users.yml` and applied by `securityadmin.sh` (never driven by `--env-file`). Rotating only `wazuh.env` updates the first half and silently leaves the second at its factory value. Both halves must be changed together — see §5.6 and the [Secret Rotation Guide](02-secret-rotation.md). For the full rationale, see [ADR-002](05-architecture-decision-records.md).
+
+## 5.4 Configure the Run Command
+
+In Dokploy → **Advanced → Run Command**, paste the following on a **single line**:
+
+```
+compose -p soccenter-wazuhstack --env-file /etc/dokploy/secrets/wazuh.env -f ./01-Wazuh-Stack/wazuh-docker/docker-compose.yml up -d --remove-orphans
+```
+
+> [!NOTE] The Run Command must be on a **single line** — Dokploy does not support line continuations with `\`. Multi-line commands will fail silently.
+
+> [!NOTE] The `-p soccenter-wazuhstack` flag controls the Docker project name and therefore the prefix of all named volumes, containers, and networks. Changing this value later requires volume migration.
+
+## 5.5 Initial Deploy
+
+Click **Deploy** in the Dokploy UI and wait for the containers to start.
+
+```bash
+# Verify containers are running
+docker ps | grep wazuh
+```
+
+> [!NOTE] Containers may stop or report errors on this first run — this is expected. Docker creates the named volumes before they are initialized. The message `Error response from daemon: No such container` is a Dokploy UI polling artifact and can be safely ignored if containers are running.
+
+Wait for the cluster to report `green` before initializing the security plugin:
+
+```bash
+docker exec wazuh1.indexer curl -k -s \
+  -u admin:<INDEXER_PASSWORD> \
+  https://localhost:9200/_cluster/health?pretty | grep -E "cluster_name|status"
+# Expected: "status" : "green"
+```
+
+## 5.6 Initialize the OpenSearch Security Plugin
 
 > [!CAUTION] **This step is mandatory after every initial deployment or volume recreation.**
 > 
 > Without it, the indexer logs will loop on: `Not yet initialized (you may need to run securityadmin)`
-> 
-> `securityadmin.sh` is the standard initialization mechanism for Wazuh 4.x / OpenSearch. Check Wazuh release notes on future upgrades — this procedure may evolve.
+
+> [!NOTE] On the initial deploy, `securityadmin.sh` applies the **factory hashes** already present in `internal_users.yml` — this is expected and required to initialize the security index. It does not change any credential. Rotating away from the factory values is a separate, mandatory step before exposure (see [Secret Rotation Guide](02-secret-rotation.md)).
 
 Wait for the cluster to form:
 
@@ -633,7 +781,27 @@ docker exec -e JAVA_HOME=/usr/share/wazuh-indexer/jdk \
 
 Expected output: `Done with success`
 
-> [!WARNING] **Silent failure — Permissions**
+> [!CAUTION] **`Done with success` alone is not proof of a secured cluster**
+> 
+> `securityadmin.sh` reports `Done with success` whenever it applies the security config — including when the applied `internal_users.yml` still contains the **factory hashes**. The message confirms the config was loaded, not that credentials were changed. A documented false-positive on `wazuh-docker` is to see `Done with success` while `admin:SecretPassword` still authenticates.
+> 
+> Always validate the actual credential state, not just the command exit:
+> 
+> ```bash
+> # 1. The NEW password must authenticate → HTTP 200
+> docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
+>   -u admin:<NEW_INDEXER_PASSWORD> \
+>   https://localhost:9200/_cluster/health
+> # Expected: 200
+> 
+> # 2. The FACTORY password must be rejected → HTTP 401
+> docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
+>   -u admin:SecretPassword \
+>   https://localhost:9200/_cluster/health
+> # Expected: 401  →  a 200 here means the factory credential is still live (critical)
+> ```
+> 
+> A `200` on the second command means the rotation did not take: the bind-mounted `internal_users.yml` still holds the factory hash, or `securityadmin.sh` ran against a stale config directory. Re-check the hash in `config/wazuh_indexer/internal_users.yml` and re-run. This same guard is formalized as Check 0 in the [Health Check Guide](04-health-check.md).
 > 
 > If `securityadmin.sh` exits without `Done with success` and without a clear error, the cause is almost always incorrect file ownership on the certificate bind mount.
 > 
@@ -645,15 +813,29 @@ Expected output: `Done with success`
 > docker exec wazuh1.indexer ls -la /usr/share/wazuh-indexer/config/certs/
 > # → must show 1000:1000, not root:root
 > 
-> # Fix ownership on the host bind mount directory
-> sudo chown -R 1000:1000 config/wazuh_indexer_ssl_certs/
+> # Fix ownership on the host directory
+> sudo chown -R 1000:1000 \
+>   /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 > ```
+
+## 5.7 Configure the Public Domain
+
+> [!IMPORTANT] The domain can only be configured **after** the initial deploy. Dokploy needs the containers to be running to detect available services in the **Service Name** dropdown.
+
+In Dokploy → **Domains → Add Domain**:
+
+1. **Service Name** → select `wazuh.dashboard` from the dropdown
+2. **Host** → `wazuh.your-domain.com`
+3. **Port** → `5601`
+4. **HTTPS** → Enabled (automatic Let's Encrypt via Traefik)
+
+Then click **Redeploy** to apply the domain configuration.
 
 ---
 
 # Step 6 — Post-Deployment Validation
 
-→ See [Health Check Guide](health-check.md) for the complete validation procedure.
+See [Health Check Guide](04-health-check.md) for the complete validation procedure.
 
 **Quick cluster validation:**
 
@@ -709,12 +891,12 @@ sudo nano /etc/dokploy/secrets/wazuh.env
 
 ## P1 — Before go-live
 
-| Item                                                | Why                                      |
-| --------------------------------------------------- | ---------------------------------------- |
-| Encrypted offsite backup of `/etc/dokploy/secrets/` | Secrets are the single point of recovery |
-| SSH access restrictions (key-only, no root login)   | Reduces host attack surface              |
-| MFA on Dokploy and GitHub                           | Protects the deployment pipeline         |
-| OpenSearch snapshot repository                      | Enables index-level recovery             |
+|Item|Why|
+|---|---|
+|Encrypted offsite backup of `/etc/dokploy/secrets/`|Secrets are the single point of recovery|
+|SSH access restrictions (key-only, no root login)|Reduces host attack surface|
+|MFA on Dokploy and GitHub|Protects the deployment pipeline|
+|OpenSearch snapshot repository|Enables index-level recovery|
 
 ## P2 — Within 90 days
 
@@ -726,7 +908,7 @@ sudo nano /etc/dokploy/secrets/wazuh.env
 |Log retention policy|Compliance and storage management|
 |Regular security review of Wazuh rules and agent coverage|Ongoing detection quality|
 
-> For design rationale on accepted limitations, see [Architecture Decision Records](architecture-decisions-records.md).
+For design rationale on accepted limitations, see [Architecture Decision Records](05-architecture-decision-records.md).
 
 ---
 
@@ -736,7 +918,7 @@ sudo nano /etc/dokploy/secrets/wazuh.env
 |---|---|
 |Production-oriented reference architecture|✅|
 |GitOps-ready|✅|
-|Small-team ready|✅|
+|Small-team / Lab ready|✅|
 |Enterprise-hardened|⚠️ P1/P2 hardening required|
 |Multi-region|❌ Out of scope|
 
@@ -750,8 +932,10 @@ Users are responsible for reviewing, adapting, and validating all configurations
 
 ---
 
-© 2026 **Kevin YAKPOVI** | Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
 
-🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt) · 💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
+OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 
-_Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author._ _Part of [OpenSOC GitOps](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/deployment-guide.md`_
+Documentation licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). Source code and infrastructure examples licensed under Apache License 2.0.
+
+This document is part of the OpenSOC GitOps Documentation Suite.

@@ -64,7 +64,7 @@ Engineers are expected to adapt these examples to their own infrastructure, secu
                                 │
                         ┌───────┴────────┐
                         │                │
-               --env-file             ./config/
+               --env-file          absolute bind mounts
                (secrets)           (configuration)
                         │                │
                         └───────┬────────┘
@@ -99,13 +99,13 @@ Engineers are expected to adapt these examples to their own infrastructure, secu
 
 ## 📦 Modules
 
-| #   | Module                                 | Role                                          | Status      | Docs                                                                                     |
-| --- | -------------------------------------- | --------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------- |
-| 01  | [Wazuh Multi-Node](01-Wazuh-Stack/)    | SIEM · Log Management · Agent-based Detection | ✅ Published | [README](https://claude.ai/chat/01-Wazuh-Stack/README.md) · [Docs](01-Wazuh-Stack/docs/) |
-| 02  | [Suricata](02-Suricata/)               | Network IDS · Traffic Analysis                | 🔄 Coming   | —                                                                                        |
-| 03  | [Shuffle SOAR](03-Shuffle-SOAR/)       | Alert Automation · Playbooks · Orchestration  | 🔄 Coming   | —                                                                                        |
-| 04  | [TheHive + Cortex](04-TheHive-Cortex/) | Incident Response · Threat Intelligence       | 🔄 Coming   | —                                                                                        |
-| 05  | Discord Alerting                       | Real-time SOC Notifications                   | 🔄 Coming   | —                                                                                        |
+| #   | Module                              | Role                                          | Status      | Docs                                                              |
+| --- | ----------------------------------- | --------------------------------------------- | ----------- | ----------------------------------------------------------------- |
+| 01  | [Wazuh Multi-Node](01-Wazuh-Stack/) | SIEM · Log Management · Agent-based Detection | ✅ Published | [README](01-Wazuh-Stack/README.md) · [Docs](01-Wazuh-Stack/docs/) |
+| 02  | Suricata                            | Network IDS · Traffic Analysis                | 🔄 Coming   | —                                                                 |
+| 03  | Shuffle SOAR                        | Alert Automation · Playbooks · Orchestration  | 🔄 Coming   | —                                                                 |
+| 04  | TheHive + Cortex                    | Incident Response · Threat Intelligence       | 🔄 Coming   | —                                                                 |
+| 05  | Discord Alerting                    | Real-time SOC Notifications                   | 🔄 Coming   | —                                                                 |
 
 ---
 
@@ -134,7 +134,7 @@ Consistent across all modules:
 - External `.env` files loaded via `--env-file` in Dokploy Run Commands
 - No TLS certificates in the repository
 - Named Docker volumes for all persistent runtime data
-- Configuration files version-controlled via `./config/` bind mounts
+- Configuration files and certificates via absolute bind mounts
 - Least privilege by design
 
 > [!CAUTION] Never commit across any module:
@@ -145,6 +145,10 @@ Consistent across all modules:
 > - Backup archives
 > - Any file from `/etc/dokploy/secrets/`
 
+> [!WARNING] **Rotate factory credentials before exposure (all modules)**
+> 
+> Upstream images frequently ship public factory credentials. A stack left on defaults can start cleanly and report healthy while protected only by published passwords. Rotate before exposing any service. For Wazuh specifically, see [Health Check — Check 0](01-Wazuh-Stack/docs/04-health-check.md).
+
 ---
 
 ## 🚀 Getting Started
@@ -153,8 +157,7 @@ Each module is independently deployable. Start with the SIEM foundation:
 
 ### 1. Deploy Wazuh (SIEM core)
 
-→ [01-Wazuh-Stack/README.md](01-Wazuh-Stack/README.md)  
-→ [Deployment Guide](01-Wazuh-Stack/docs/01-deployment-guide.md)
+→ [01-Wazuh-Stack/README.md](01-Wazuh-Stack/README.md) → [Deployment Guide](01-Wazuh-Stack/docs/01-deployment-guide.md)
 
 ### Recommended deployment order
 
@@ -189,13 +192,15 @@ All modules share the following base requirements:
 
 Each module ships with its own documentation suite:
 
-| Module           | Deployment                                      | Secret Rotation                                | Troubleshooting                                | Health Check                                | ADR                                |
-| ---------------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------------------- | ---------------------------------- |
-| Wazuh            | [✅](01-Wazuh-Stack/docs/01-deployment-guide.md) | [✅](01-Wazuh-Stack/docs/02-secret-rotation.md) | [✅](01-Wazuh-Stack/docs/03-troubleshooting.md) | [✅](01-Wazuh-Stack/docs/04-health-check.md) | [✅](01-Wazuh-Stack/docs/05-adr.md) |
-| Suricata         | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
-| Shuffle SOAR     | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
-| TheHive + Cortex | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
-| Discord          | 🔄                                              | —                                              | 🔄                                             | 🔄                                          | 🔄                                 |
+| Module           | Deployment                                      | Secret Rotation                                | Troubleshooting                                | Health Check                                | ADR                                                          |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ |
+| Wazuh            | [✅](01-Wazuh-Stack/docs/01-deployment-guide.md) | [✅](01-Wazuh-Stack/docs/02-secret-rotation.md) | [✅](01-Wazuh-Stack/docs/03-troubleshooting.md) | [✅](01-Wazuh-Stack/docs/04-health-check.md) | [✅](01-Wazuh-Stack/docs/05-architecture-decision-records.md) |
+| Suricata         | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
+| Shuffle SOAR     | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
+| TheHive + Cortex | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
+| Discord          | 🔄                                              | —                                              | 🔄                                             | 🔄                                          | 🔄                                                           |
+
+The Wazuh module also ships a [Teardown & Clean Reinstall Runbook](01-Wazuh-Stack/docs/06-teardown-reinstall.md) for full removal and from-scratch reinstallation.
 
 ---
 
@@ -235,18 +240,20 @@ Users are responsible for reviewing, adapting, and validating all configurations
 
 This repository uses a dual-license model:
 
-- **Source code and infrastructure examples** — [Apache 2.0](LICENSE-CODE)
-- **Documentation** (README files, `/docs`, runbooks, ADRs) — [CC BY 4.0](LICENSE-DOCS)
+- **Source code, infrastructure examples, Docker Compose files, deployment scripts, and configuration examples** are licensed under the **Apache License 2.0**.
+- **Documentation** (README files, `/docs`, runbooks, guides, and ADRs) is licensed under **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
 
-See `LICENSE-CODE` and `LICENSE-DOCS` for full terms.
+See:
+
+- `LICENSE`
+- `LICENSE-DOCS`
 
 ---
 
-## 📌 Maintainer
+## Maintainer
 
-**Kevin YAKPOVI**  
-Security Engineer · SOC Automation · Open Source SOC Builder
+**Kevin YAKPOVI** — Security Engineer · SOC Automation · Open Source SOC Builder
 
-🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt)  
-💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
-📦 [OpenSOC-GitOps-Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy)
+- GitHub: [github.com/Kev1-alt](https://github.com/Kev1-alt)
+- LinkedIn: [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
+- Repository: [OpenSOC-GitOps-Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy)

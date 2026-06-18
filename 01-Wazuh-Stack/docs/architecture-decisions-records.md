@@ -4,7 +4,7 @@
 |---|---|
 |**Author**|Kevin YAKPOVI|
 |**Last Updated**|June 2026|
-|**Status**|Production|
+|**Status**|Published|
 
 ---
 
@@ -36,9 +36,9 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 #### Required reading
 
-|Document|Read before this guide because...|
-|---|---|
-|[Deployment Guide](https://claude.ai/chat/01-deployment-guide.md)|Provides the operational context that these decisions support|
+| Document                                   | Read before this guide because...                             |
+| ------------------------------------------ | ------------------------------------------------------------- |
+| [Deployment Guide](01-deployment-guide.md) | Provides the operational context that these decisions support |
 
 ---
 
@@ -56,12 +56,12 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 **This document does NOT cover:**
 
-| Out of scope                       | See instead           |
-| ---------------------------------- | --------------------- |
-| Step-by-step deployment procedures | Deployment Guide      |
-| Credential rotation procedures     | Secret Rotation Guide |
-| Incident diagnosis                 | Troubleshooting Guide |
-| Post-deployment validation         | Health Check Guide    |
+|Out of scope|See instead|
+|---|---|
+|Step-by-step deployment procedures|Deployment Guide|
+|Credential rotation procedures|Secret Rotation Guide|
+|Incident diagnosis|Troubleshooting Guide|
+|Post-deployment validation|Health Check Guide|
 
 ---
 
@@ -69,14 +69,15 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #      | Document                          | Description                      | Status           |
-| ------ | --------------------------------- | -------------------------------- | ---------------- |
-| 00     | README                            | Project overview and quick start | ✅ Production     |
-| 01     | Deployment Guide                  | Full deployment procedure        | ✅ Production     |
-| 02     | Secret Rotation Guide             | Credentials rotation runbook     | ✅ Production     |
-| 03     | Troubleshooting Guide             | Incident diagnosis runbook       | ✅ Production     |
-| 04     | Health Check Guide                | Post-deployment validation       | ✅ Production     |
-| **05** | **Architecture Decision Records** | **This document**                | **✅ Production** |
+| #      | Document                                                       | Description                              | Status           |
+| ------ | -------------------------------------------------------------- | ---------------------------------------- | ---------------- |
+| 00     | [README](README.md)                                            | Project overview and quick start         | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)                     | Full deployment procedure                | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md)                 | Credentials rotation runbook             | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md)                 | Incident diagnosis runbook               | ✅ Production     |
+| 04     | [Health Check Guide](04-health-check.md)                       | Post-deployment validation               | ✅ Production     |
+| **05** | **Architecture Decision Records**                              | **This document**                        | **✅ Production** |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md) | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ---
 
@@ -102,8 +103,7 @@ Always verify file permissions and ownership before running any command that tou
 
 ## ADR-000 — Blueprint Rather Than Turnkey Deployment
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
@@ -138,8 +138,7 @@ Commands and file paths shown throughout the documentation represent reference p
 
 ## ADR-001 — Docker Compose over Kubernetes
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
@@ -173,23 +172,51 @@ Use Docker Compose exclusively. Kubernetes is intentionally out of scope.
 
 ## ADR-002 — External Secrets via `--env-file`
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
 Dokploy supports environment variable injection through its UI. However, on complex Docker Compose stacks, this approach introduces two problems:
 
 1. UI-defined variables are harder to audit, version, and reproduce across environments.
-2. Dokploy's automatic Git synchronization (`git pull` / reset) can overwrite a local `.env` file placed in the working directory, causing silent credential loss.
+2. Docker Compose auto-reads a `.env` file from the working directory. When Dokploy synchronizes the Git repository (`git pull` / reset), a working-directory `.env` placed there is fragile and easy to desynchronize from the real secrets, causing silent credential drift.
 
 Additionally, passing `--env-file` via the Run Command ensures that all variables are fully resolved by Docker Compose before Wazuh and OpenSearch entrypoint scripts execute — a common source of silent initialization failures when using `env_file` inside `docker-compose.yml` instead.
 
 ### Decision
 
-Store all secrets in a permanent file at `/etc/dokploy/secrets/wazuh.env`, outside the Git working directory, and load it using the `--env-file` flag in the Run Command.
+Store all secrets in a permanent file at `/etc/dokploy/secrets/wazuh.env`, outside the Git working directory, and load it using the `--env-file` flag in the Run Command. The working-directory `.env` is kept empty or absent so that `wazuh.env` is the single source of truth.
 
 The Git repository contains zero secrets, zero certificates, and zero environment files.
+
+### Scope of `--env-file` injection
+
+`--env-file` is **not** a blanket credential-injection mechanism. It only resolves `${VAR}` references that appear in a service's `environment:` block in `docker-compose.yml`. It does not reach into bind-mounted configuration files. Understanding this boundary is essential to diagnosing authentication failures and to avoiding the factory-credentials trap.
+
+Compose variable precedence (highest first):
+
+```text
+--env-file (explicit)   >   working-directory .env (implicit)   >   shell environment
+```
+
+Effective source per component:
+
+|Component|What `--env-file` drives|Effective source|Driven by `--env-file`?|
+|---|---|---|---|
+|`wazuh.master` / `wazuh.worker`|`${INDEXER_*}`, `${API_*}` in `environment:`|runtime env injection|✅ direct|
+|`wazuh.dashboard`|`${API_PASSWORD}` (→ `wazuh-wui`), `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:`|runtime env injection|✅ direct|
+|`wazuh.dashboard` (indexer auth hash)|bcrypt hash of `kibanaserver`|`internal_users.yml` (bind mount)|❌ literal hash|
+|`wazuh1/2/3.indexer`|—|`internal_users.yml` + `securityadmin.sh`|❌ never|
+|Bind-mounted configs (`opensearch_dashboards.yml`, `wazuh.yml`, `internal_users.yml`)|—|literal file content on host|❌ never|
+
+### The two-halves invariant
+
+Every OpenSearch credential exists as two halves that must match:
+
+- a **plaintext half**, injected at runtime from `wazuh.env` (driven by `--env-file`), and
+- a **bcrypt-hash half**, stored in `internal_users.yml` and applied by `securityadmin.sh` (never driven by `--env-file`).
+
+`--env-file` only updates the plaintext half. A rotation that edits `wazuh.env` but not the hash leaves the indexer verifying against the old or factory hash, with no error in the logs. This is the root cause of the factory-credentials silent failure mode addressed in the Deployment Guide (§2.1, §5.6), the Secret Rotation Guide, and the Health Check Guide (Check 0).
 
 ### Consequences
 
@@ -198,19 +225,17 @@ The Git repository contains zero secrets, zero certificates, and zero environmen
 |Secret file lives on host filesystem|Manual management required|Permissions set to `600 root:root`|
 |No automatic secret rotation|Credentials persist until manually rotated|Secret Rotation Guide documents full procedure|
 |Host must be backed up including secrets path|Secrets lost if host is rebuilt without backup|Documented in deployment prerequisites|
+|`--env-file` scope is partial|Bind-mounted hashes are not injected — easy to rotate only one half|Two-halves invariant documented; factory-credential guard in Health Check Check 0|
 
 ---
 
 ## ADR-003 — Hybrid Volume Strategy: Named Volumes for Data, Bind Mounts for Configuration
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
-The official Wazuh Docker multi-node stack uses bind mounts pointing to absolute host filesystem paths (e.g. `~/wazuh-data/...`, `/home/user/...`). This creates tight coupling to the host directory structure, which conflicts with GitOps workflows and makes server migrations fragile.
-
-A strict named-volume-only approach solves the portability problem but introduces a new one: configuration files that require frequent operational edits (credentials, certificates, cluster settings) become inaccessible without a temporary container, adding friction to routine operations such as secret rotation.
+The official Wazuh Docker multi-node stack uses bind mounts pointing to absolute host filesystem paths. Configuration files that require frequent operational edits (credentials, certificates, cluster settings) must remain directly editable on the host, while persistent runtime data must survive container recreation without manual intervention.
 
 ### Decision
 
@@ -227,41 +252,36 @@ Apply a hybrid approach based on the nature of the data being stored:
 # ... all runtime state volumes
 ```
 
-**Bind mounts from `./config/`** — for all configuration files that require direct host-level editing:
+**Absolute bind mounts** — for all configuration files and certificates that require direct host-level editing:
 
 ```yaml
-- ./config/wazuh_indexer_ssl_certs/root-ca.pem:...
-- ./config/wazuh_indexer/internal_users.yml:...
-- ./config/wazuh_dashboard/wazuh.yml:...
-- ./config/wazuh_dashboard/opensearch_dashboards.yml:...
-- ./config/wazuh_cluster/wazuh_manager.conf:...
+- /home/user/.../config/wazuh_indexer_ssl_certs/root-ca.pem:...
+- /home/user/.../config/wazuh_indexer/internal_users.yml:...
+- /home/user/.../config/wazuh_dashboard/wazuh.yml:...
+- /home/user/.../config/wazuh_dashboard/opensearch_dashboards.yml:...
+- /home/user/.../config/wazuh_cluster/wazuh_manager.conf:...
 ```
 
-The `./config/` path is relative to the Docker Compose working directory, which Dokploy consistently resolves to `/etc/dokploy/compose/<APP_ID>/code/` during deployment. No absolute host paths are used anywhere in the stack.
-
-Volume names are prefixed by the Docker Compose project name (`-p <project-name>`), making them consistently addressable across deployments.
+This v1 blueprint uses **absolute host paths** for bind mounts, because Dokploy does not run `docker compose` from the compose-file directory and relative `./config/` paths fail with `not a directory`. A future v2 blueprint will introduce bootstrap-based path abstraction.
 
 ### Why this distinction matters
 
-Configuration files are operationally active artifacts — they are edited during secret rotation, certificate renewal, and cluster tuning. Direct host-level access (via `nano`, `sed`, or automated scripts) is a feature, not a limitation. Wrapping every config edit in an alpine container would add unnecessary friction to routine operations.
-
-Persistent data volumes, by contrast, should never be edited directly — they are written exclusively by running containers and must survive container recreation, redeployments, and host maintenance without any manual intervention.
+Configuration files are operationally active artifacts — they are edited during secret rotation, certificate renewal, and cluster tuning. Direct host-level access is a feature, not a limitation. Persistent data volumes, by contrast, should never be edited directly — they are written exclusively by running containers and must survive container recreation.
 
 ### Consequences
 
 |Trade-off|Impact|Mitigation|
 |---|---|---|
-|Config files coupled to Dokploy working directory|`./config/` path depends on Dokploy's consistent working directory resolution|Dokploy always resolves `./` from the synced Git repo path — behavior is stable and documented|
-|Named volumes not directly browsable|Runtime data inspection requires a temporary container|Alpine-based read pattern available; direct inspection is rarely needed for data volumes|
-|Config files must be present before first deploy|Missing files cause container startup failures|Documented in deployment prerequisites; configs are version-controlled in Git|
-|Hybrid model requires understanding the distinction|Engineers must know which files are in volumes vs bind mounts|Configuration Reference table in each operational guide documents all file locations|
+|Config paths coupled to the host directory layout|Absolute paths must exist before first deploy|Documented in deployment prerequisites|
+|Named volumes not directly browsable|Runtime data inspection requires a temporary container|Direct inspection is rarely needed for data volumes|
+|Config files must be present before first deploy|Missing files cause container startup failures|Configs are version-controlled in Git (minus secrets)|
+|Hybrid model requires understanding the distinction|Engineers must know which files are in volumes vs bind mounts|Configuration Reference table in each operational guide|
 
 ---
 
 ## ADR-004 — Traefik SSL Termination
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
@@ -285,18 +305,11 @@ Internal container-to-container traffic (Dashboard → OpenSearch) retains TLS u
 
 ## ADR-005 — Accepted Architectural Limitations
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
-The following limitations were identified during the design phase and explicitly accepted based on the target audience of this project:
-
-- Startups
-- Small security teams
-- Open-source SOC builders
-
-Addressing these limitations would introduce additional operational complexity without providing sufficient value for the intended deployment scale.
+The following limitations were identified during the design phase and explicitly accepted based on the target audience of this project: startups, small security teams, and open-source SOC builders.
 
 ### Decision
 
@@ -322,22 +335,17 @@ The following architectural limitations are intentionally accepted:
 |Reduced resilience compared to enterprise architectures|Accepted|
 |Increased reliance on documented operational procedures|Accepted|
 
-> These limitations are intentional design choices rather than technical gaps.
-> 
-> Each limitation should be reviewed individually if deployment scale, team size, compliance requirements, or availability requirements change.
+> These limitations are intentional design choices rather than technical gaps. Each limitation should be reviewed individually if deployment scale, team size, compliance requirements, or availability requirements change.
 
 ---
 
 ## ADR-006 — GitOps Deployment Model with Dokploy
 
-**Status:** Accepted  
-**Date:** June 2026
+**Status:** Accepted **Date:** June 2026
 
 ### Context
 
-The project requires reproducible deployments, version-controlled infrastructure, and simplified operational workflows for small security teams.
-
-Traditional manual deployments create configuration drift, complicate change tracking, and increase operational complexity when diagnosing or reproducing an environment.
+The project requires reproducible deployments, version-controlled infrastructure, and simplified operational workflows for small security teams. Traditional manual deployments create configuration drift, complicate change tracking, and increase operational complexity.
 
 ### Decision
 
@@ -360,9 +368,10 @@ Use Git as the single source of truth for infrastructure definitions and Dokploy
 
 ---
 
-© 2026 **Kevin YAKPOVI** | Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
 
-🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt) · 💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
+OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 
-*Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author.*
-*Part of [OpenSOC GitOps Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/[nom-du-fichier.md]`*`_`_
+Documentation licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). Source code and infrastructure examples licensed under Apache License 2.0.
+
+This document is part of the OpenSOC GitOps Documentation Suite.

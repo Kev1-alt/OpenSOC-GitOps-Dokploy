@@ -1,12 +1,10 @@
 # Troubleshooting Guide — Wazuh Multi-Node Stack
 
-
 |**Version**|1.0|
 |---|---|
 |**Author**|Kevin YAKPOVI|
 |**Last Updated**|June 2026|
-|**Status**|Production|
-
+|**Status**|Published|
 
 ---
 
@@ -24,14 +22,15 @@ This guide is part of the OpenSOC GitOps reference architecture. It documents th
 
 Part of the OpenSOC GitOps Documentation Suite.
 
-| #      | Document                                       | Description                      | Status           |
-| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
-| 00     | [README](../README.md)                         | Project overview and quick start | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)     | Full deployment procedure        | ✅ Production     |
-| **02** | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | **✅ Production** |
-| 03     | Troubleshooting Guide                          | **This document**                | ✅ Production     |
-| 04     | [Health Check Guide](04-health-check.md)       | Post-deployment validation       | ✅ Production     |
-| 05     | [Architecture Decision Records](05-adr.md)     | Design rationale and trade-offs  | ✅ Production     |
+| #      | Document                                                             | Description                              | Status           |
+| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
+| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
+| **03** | **Troubleshooting Guide**                                            | **This document**                        | **✅ Production** |
+| 04     | [Health Check Guide](04-health-check.md)                             | Post-deployment validation               | ✅ Production     |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ### Intended Audience
 
@@ -86,31 +85,46 @@ Commands and file paths shown throughout this document should be treated as refe
 The reference architecture uses a hybrid storage model:
 
 - Named Docker volumes for runtime data
-- Bind mounts from `./config/` for operational configuration
+- Absolute bind mounts for operational configuration and certificates
 
 Examples:
 
 ```
-Runtime Data
-├── wazuh-indexer-data-*
-├── wazuh-manager-data
-├── wazuh-dashboard-data
-└── wazuh-logs-*
+Runtime Data (named volumes)
+├── wazuh-indexer-data-1 / -2 / -3
+├── master-wazuh-* / worker-wazuh-*
+├── wazuh-dashboard-config
+└── wazuh-dashboard-custom
 ```
 
 ```
-Configuration
-├── ./config/wazuh_dashboard/
-├── ./config/wazuh_indexer/
-├── ./config/wazuh_indexer_ssl_certs/
-└── ./config/wazuh_cluster/
+Configuration (absolute bind mounts)
+├── /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_dashboard/
+├── /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer/
+├── /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
+└── /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/
 ```
+
+> [!NOTE] This v1 blueprint uses **absolute host paths** for bind mounts, not relative `./config/` paths — Dokploy does not run `docker compose` from the compose-file directory, so relative paths fail. Replace `/home/user/OpenSOC-GitOps-Dokploy` with your actual repository root.
 
 For the rationale behind this design, see:
 
 ```
 ADR-003 — Hybrid Volume Strategy
 ```
+
+---
+
+> [!NOTE] **Container addressing**
+> 
+> Commands address containers by their short service name (`wazuh1.indexer`, `wazuh.master`, `wazuh.dashboard`) — these are the container **hostnames**. On the host, Dokploy prefixes the real container names with the project name and a generated suffix (e.g. `soccenter-wazuhstack-a1b2c3-wazuh1.indexer-1`), so `docker exec wazuh1.indexer` will not resolve directly. Resolve the real name once per shell:
+> 
+> ```bash
+> IDX1=$(docker ps --filter "name=wazuh1.indexer" --format '{{.Names}}' | head -1)
+> # then: docker exec "$IDX1" ...
+> ```
+> 
+> Treat the short names as placeholders to adapt to your environment.
 
 ---
 
@@ -289,9 +303,9 @@ wazuh3.indexer
 
 Review logs if necessary:
 
-```
+```bash
 docker logs wazuh1.indexer --tail 100 | \
-grep -Ei "error|failed|exception"
+  grep -Ei "error|failed|exception"
 ```
 
 ---
@@ -333,26 +347,43 @@ Verify the Dokploy Run Command uses:
 > Passing `--env-file` via the Run Command ensures that all variables are fully resolved by Docker Compose before Wazuh and OpenSearch entrypoint scripts execute.
 > 
 > Failure to do so may result in:
+> 
 > - Empty credentials
 > - OpenSearch authentication failures
 > - Dashboard startup failures
 > - Cluster initialization issues
->  
-See: ADR-002 — External Secrets via --env-file
+> 
+> Note the scope: `--env-file` only drives `${VAR}` references in `environment:` blocks (master/worker/dashboard). It does **not** populate bind-mounted files (`internal_users.yml`, `opensearch_dashboards.yml`, `wazuh.yml`). See ADR-002 — Scope of `--env-file` injection.
+
+---
 
 **Step 5 — Verify Certificates**
 
-Verify certificate validity directly from inside the indexer.
+Because the reference architecture uses **absolute bind mounts** for certificates, certificate troubleshooting always begins on the host in:
+
+```
+/home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
+```
+
+and not in Docker volumes.
+
+Verify certificate validity from inside the indexer:
 
 ```bash
-# Verify certificate validity
 docker exec wazuh1.indexer \
   openssl x509 \
   -in /usr/share/wazuh-indexer/config/certs/admin.pem \
   -noout -subject -issuer -dates
 ```
 
-Expected:
+Verify mount visibility from inside the container:
+
+```bash
+docker exec wazuh1.indexer \
+  ls -la /usr/share/wazuh-indexer/config/certs/
+```
+
+Expected files:
 
 ```
 admin.pem
@@ -360,32 +391,18 @@ admin-key.pem
 root-ca.pem
 ```
 
-Verify mount visibility from inside the container:
-
-```
-docker exec wazuh1.indexer \
-ls -la /usr/share/wazuh-indexer/config/certs/
-```
-
 If files are missing:
 
-- verify Git repository synchronization
-- verify bind mount definitions
-- verify file permissions
-
-Because the reference architecture uses bind mounts for certificates, certificate troubleshooting should always begin in:
-
-```
-./config/wazuh_indexer_ssl_certs/
-```
-
-and not in Docker volumes.
+- verify the absolute bind mount source paths exist on the host
+- verify Git repository synchronization for non-secret configs
+- verify file permissions (must be readable by UID 1000)
 
 See:
 
 ```
 ADR-003 — Hybrid Volume Strategy
 ```
+
 ---
 
 ## Case 2 — Authentication Finally Failed
@@ -430,9 +447,13 @@ docker exec wazuh1.indexer curl -k -s \
 # → 401 = incorrect password → see Secret Rotation Guide
 ```
 
+> [!IMPORTANT] **Check the two halves of the credential**
+> 
+> An `Authentication finally failed` can mean the plaintext half (env) and the hash half (`internal_users.yml`) are out of sync. If the manual test above returns `401` with what you believe is the correct password, the bcrypt hash in `internal_users.yml` does not match — re-apply it with `securityadmin.sh`. If a **factory** password still authenticates (`admin:SecretPassword` → `200`), the hash was never rotated. See [Health Check — Check 0](04-health-check.md) and ADR-002.
+
 ---
 
-# Case 3 — Not Yet Initialized
+## Case 3 — Not Yet Initialized
 
 ### Symptom
 
@@ -451,12 +472,23 @@ The OpenSearch Security plugin has not been initialized. This typically occurs a
 
 ### Resolution
 
-```
-# Wait for the cluster to formdocker logs wazuh1.indexer 2>&1 | \grep -E "started|Security|initialized" | tail -5
+```bash
+# Wait for the cluster to form
+docker logs wazuh1.indexer 2>&1 | \
+  grep -E "started|Security|initialized" | tail -5
 ```
 
-```
-# Run securityadmindocker exec -e JAVA_HOME=/usr/share/wazuh-indexer/jdk \  -it wazuh1.indexer \  bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \  -cd /usr/share/wazuh-indexer/config/opensearch-security/ \  -icl -nhnv \  -cacert /usr/share/wazuh-indexer/config/certs/root-ca.pem \  -cert /usr/share/wazuh-indexer/config/certs/admin.pem \  -key /usr/share/wazuh-indexer/config/certs/admin-key.pem \  -h wazuh1.indexer -p 9200
+```bash
+# Run securityadmin
+docker exec -e JAVA_HOME=/usr/share/wazuh-indexer/jdk \
+  -it wazuh1.indexer \
+  bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh \
+  -cd /usr/share/wazuh-indexer/config/opensearch-security/ \
+  -icl -nhnv \
+  -cacert /usr/share/wazuh-indexer/config/certs/root-ca.pem \
+  -cert /usr/share/wazuh-indexer/config/certs/admin.pem \
+  -key /usr/share/wazuh-indexer/config/certs/admin-key.pem \
+  -h wazuh1.indexer -p 9200
 ```
 
 Expected result:
@@ -465,54 +497,54 @@ Expected result:
 Done with success
 ```
 
-> [!WARNING]  
-> **Silent Failure — Certificate Permissions**
+> [!WARNING] **Silent Failure — Certificate Permissions**
 > 
 > If `securityadmin.sh` exits without `Done with success` and without a clear error message, the issue is frequently caused by certificate file permissions.
 > 
-> In this reference architecture, certificates are stored under:
+> In this reference architecture, certificates are stored under an absolute path:
 > 
 > ```
-> ./config/wazuh_indexer_ssl_certs/
+> /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 > ```
 > 
 > and mounted into the containers using bind mounts.
 > 
 > Certificate files must be readable by the `wazuh-indexer` process (UID 1000 inside the container).
 
+> [!CAUTION] **`Done with success` does not prove credentials changed**
+> 
+> `securityadmin.sh` returns `Done with success` even when it applies an `internal_users.yml` that still holds the factory hashes. Always confirm with the Default Credentials Guard: `admin:SecretPassword` must return `401` (see [Health Check — Check 0](04-health-check.md)).
+
 ### Verify permissions
 
-```
+```bash
 docker exec wazuh1.indexer id
 ```
 
-```
-docker exec wazuh1.indexer \  ls -la /usr/share/wazuh-indexer/config/certs/
-```
-
-Expected:
-
-```
-1000 1000
+```bash
+docker exec wazuh1.indexer \
+  ls -la /usr/share/wazuh-indexer/config/certs/
 ```
 
-or equivalent read permissions for the wazuh-indexer user.
+Expected: ownership `1000 1000` or equivalent read permissions for the wazuh-indexer user.
 
 ### Fix permissions
 
-```
-sudo chown -R 1000:1000 \./config/wazuh_indexer_ssl_certs
+```bash
+sudo chown -R 1000:1000 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 ```
 
-```
-sudo chmod 640 \./config/wazuh_indexer_ssl_certs/*.pem
+```bash
+sudo chmod 640 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/*.pem
 ```
 
 Then redeploy the stack and rerun `securityadmin.sh`.
 
 ---
 
-# Case 4 — SSLHandshakeException / certificate_unknown
+## Case 4 — SSLHandshakeException / certificate_unknown
 
 ### Symptom
 
@@ -522,9 +554,7 @@ SSLHandshakeException: (certificate_unknown) Received fatal alert: certificate_u
 
 ### Cause
 
-An inconsistent certificate trust chain.
-
-This usually happens when:
+An inconsistent certificate trust chain. This usually happens when:
 
 - Certificates were regenerated partially
 - Files from different certificate generations were mixed
@@ -533,8 +563,10 @@ This usually happens when:
 
 ### Diagnosis
 
-```
-docker exec wazuh1.indexer bash -c "openssl verify \  -CAfile /usr/share/wazuh-indexer/config/certs/root-ca.pem \  /usr/share/wazuh-indexer/config/certs/admin.pem"
+```bash
+docker exec wazuh1.indexer bash -c "openssl verify \
+  -CAfile /usr/share/wazuh-indexer/config/certs/root-ca.pem \
+  /usr/share/wazuh-indexer/config/certs/admin.pem"
 ```
 
 Expected result:
@@ -556,29 +588,32 @@ If verification fails, all certificates must be regenerated from the same CA.
 Follow the complete procedure documented in:
 
 ```
-Deployment Guide → Generate Certificates
+Deployment Guide → Step 4 — Certificate Generation and Permissions
 ```
 
-After generating the new certificates:
+After generating the new certificates, copy them into the absolute bind-mount source directory:
 
-```
-cp generated-certs/* \./config/wazuh_indexer_ssl_certs/
+```bash
+cp generated-certs/* \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 ```
 
 Apply permissions:
 
-```
-sudo chown -R 1000:1000 \./config/wazuh_indexer_ssl_certs
+```bash
+sudo chown -R 1000:1000 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 ```
 
-```
-sudo chmod 640 \./config/wazuh_indexer_ssl_certs/*.pem
+```bash
+sudo chmod 640 \
+  /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/*.pem
 ```
 
 Verify the files:
 
-```
-ls -la ./config/wazuh_indexer_ssl_certs/
+```bash
+ls -la /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 ```
 
 Then redeploy from Dokploy.
@@ -626,10 +661,11 @@ echo "Token: $TOKEN"
 
 |Symptom|Layer|Quick Check|Action|
 |---|---|---|---|
+|Factory password returns 200|Credentials|Health Check — Check 0|Rotate hash + plaintext|
 |502 Bad Gateway|Traefik|`docker logs traefik`|Verify backend connectivity|
 |Dashboard unavailable|Dashboard|`curl localhost:5601`|Review Dashboard logs|
 |ERROR 3099|Dashboard / API|`curl localhost:55000`|Verify API and credentials|
-|Authentication finally failed|Indexer|Check env variables|Fix `--env-file` or rotate password|
+|Authentication finally failed|Indexer|Check env variables + hash|Fix `--env-file` or rotate both halves|
 |Not yet initialized|OpenSearch Security|Run securityadmin|Initialize security plugin|
 |certificate_unknown|TLS|`openssl verify`|Full certificate regeneration|
 |Empty variables|Dokploy|`docker exec env`|Fix Run Command `--env-file`|
@@ -641,22 +677,21 @@ echo "Token: $TOKEN"
 
 ## References
 
-| Resource                          | URL                                              |
-| --------------------------------- | ------------------------------------------------ |
-| Wazuh Documentation               | https://documentation.wazuh.com                  |
-| OpenSearch Security Documentation | https://opensearch.org/docs/latest/security/     |
-| Dokploy Documentation             | https://docs.dokploy.com                         |
-| Traefik Documentation             | https://doc.traefik.io/traefik/                  |
-| Secret Rotation Guide             | [02-secret-rotation.md](02-secret-rotation.md)   |
-| Deployment Guide                  | [01-deployment-guide.md](01-deployment-guide.md) |
+|Resource|URL|
+|---|---|
+|Wazuh Documentation|https://documentation.wazuh.com|
+|OpenSearch Security Documentation|https://opensearch.org/docs/latest/security/|
+|Dokploy Documentation|https://docs.dokploy.com|
+|Traefik Documentation|https://doc.traefik.io/traefik/|
+|Secret Rotation Guide|[02-secret-rotation.md](https://claude.ai/chat/02-secret-rotation.md)|
+|Deployment Guide|[01-deployment-guide.md](https://claude.ai/chat/01-deployment-guide.md)|
 
 ---
 
----
+© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
 
-© 2026 **Kevin YAKPOVI** | Security Engineer · Open Source SOC Builder
+OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 
-🐙 [github.com/Kev1-alt](https://github.com/Kev1-alt) · 💼 [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
+Documentation licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). Source code and infrastructure examples licensed under Apache License 2.0.
 
-*Published under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — Any reproduction must credit the original author.*
-*Part of [OpenSOC GitOps Dokploy](https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy) · Document maintained at: `01-Wazuh-Stack/docs/[nom-du-fichier.md]`*`_
+This document is part of the OpenSOC GitOps Documentation Suite.
