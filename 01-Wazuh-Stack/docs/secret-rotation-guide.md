@@ -153,7 +153,7 @@ Every OpenSearch-side credential exists in **two places that must always match**
 
 > [!CAUTION] Always back up `/etc/dokploy/secrets/` before any secret rotation. This directory is the source of truth for all credentials. Files present in Docker volumes may be recreated or replaced during maintenance.
 
-> [!WARNING] Some secret rotations require a Dashboard or Manager restart. Perform these operations during a maintenance window appropriate for your environment.
+> [!WARNING] Some secret rotations require a Dokploy **Deploy or Redeploy** to propagate the new values. Perform these operations during a maintenance window appropriate for your environment.
 
 ---
 
@@ -163,7 +163,7 @@ Every OpenSearch-side credential exists in **two places that must always match**
 |---|---|---|
 |`admin` (Indexer)|OpenSearch cluster|No service interruption|
 |`kibanaserver`|Dashboard|Dashboard reconnection required after deployment|
-|`wazuh-wui`|Dashboard + Manager|Dashboard and Manager restart required|
+|`wazuh-wui`|Dashboard + Manager|Dokploy Redeploy required (recreates Dashboard + Manager)|
 
 ---
 
@@ -250,7 +250,7 @@ Then click **Deploy** in Dokploy to propagate to the Dashboard and Manager.
 
 # 2. Rotating the API Password (`wazuh-wui`)
 
-**Impact:** Dashboard and Manager restart required — schedule a maintenance window.
+**Impact:** Dokploy Redeploy required (recreates Dashboard + Manager) — schedule a maintenance window.
 
 ```bash
 # ============================================================
@@ -281,7 +281,7 @@ sudo docker exec wazuh.master bash -c "curl -k -s \
   -d '{\"password\": \"<NEW_PASSWORD>\"}'"
 
 # Step 4 — Update wazuh.yml on the host (bind mount — critical)
-# Without this step, the Dashboard loses API access after restart
+# Without this step, the Dashboard loses API access after the redeploy
 cd /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/
 
 sudo sed -i 's/password: ".*"/password: "<NEW_PASSWORD>"/' \
@@ -295,24 +295,23 @@ sudo cp config/wazuh_dashboard/wazuh.yml \
   /etc/dokploy/secrets/configs/wazuh.yml
 
 # Update the authoritative secrets file
-sudo sed -i 's/API_PASSWORD=.*/API_PASSWORD=<NEW_PASSWORD>/' \
-  /etc/dokploy/secrets/wazuh.env
+sudo nano /etc/dokploy/secrets/wazuh.env
+# Update: API_PASSWORD=<NEW_PASSWORD>
 # Note: wazuh.env is the single source of truth (--env-file).
 # Do not edit the working-directory .env — it stays empty/absent.
 
-# Step 5 — Restart in the correct order
-sudo docker restart wazuh.master
-sleep 10
-sudo docker restart wazuh.dashboard
+# Step 5 — Click Deploy or Redeploy in Dokploy to propagate the new password
 
-# Step 6 — Final verification
+# Step 6 — Final verification (run after the deploy completes)
 sudo docker exec wazuh.master curl -k -s \
   -u wazuh-wui:<NEW_PASSWORD> \
   -X POST https://localhost:55000/security/user/authenticate \
   | jq '.error // "Auth OK"'
 ```
 
-> [!WARNING] Updating `config/wazuh_dashboard/wazuh.yml` at Step 4 is mandatory. This file is bind-mounted directly into the Dashboard container. Without this update, the Dashboard will lose access to the API after a restart.
+> [!WARNING] Updating `config/wazuh_dashboard/wazuh.yml` at Step 4 is mandatory. This file is bind-mounted directly into the Dashboard container. Without this update, the Dashboard will lose access to the API after the deploy.
+
+> [!WARNING] Updating `config/wazuh_dashboard/wazuh.yml` at Step 4 is mandatory. This file is bind-mounted directly into the Dashboard container. Without this update, the Dashboard will lose access to the API after the redeploy.
 
 ---
 
