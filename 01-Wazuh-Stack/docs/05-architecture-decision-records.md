@@ -1,10 +1,10 @@
 # Architecture Decisions Records — Wazuh Multi-Node Stack
 
-|**Version**|1.0|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0           |
+| ---------------- | ------------- |
+| **Author**       | Kevin YAKPOVI |
+| **Last Updated** | June 2026     |
+| **Status**       | Published     |
 
 ---
 
@@ -36,9 +36,9 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 #### Required reading
 
-| Document                                   | Read before this guide because...                             |
-| ------------------------------------------ | ------------------------------------------------------------- |
-| [Deployment Guide](01-deployment-guide.md) | Provides the operational context that these decisions support |
+|Document|Read before this guide because...|
+|---|---|
+|[Deployment Guide](01-deployment-guide.md)|Provides the operational context that these decisions support|
 
 ---
 
@@ -56,12 +56,12 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 **This document does NOT cover:**
 
-|Out of scope|See instead|
-|---|---|
-|Step-by-step deployment procedures|Deployment Guide|
-|Credential rotation procedures|Secret Rotation Guide|
-|Incident diagnosis|Troubleshooting Guide|
-|Post-deployment validation|Health Check Guide|
+| Out of scope                       | See instead           |
+| ---------------------------------- | --------------------- |
+| Step-by-step deployment procedures | Deployment Guide      |
+| Credential rotation procedures     | Secret Rotation Guide |
+| Incident diagnosis                 | Troubleshooting Guide |
+| Post-deployment validation         | Health Check Guide    |
 
 ---
 
@@ -69,14 +69,14 @@ Document the architectural decisions made for the OpenSOC GitOps stack, includin
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #      | Document                                                       | Description                              | Status           |
-| ------ | -------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](README.md)                                            | Project overview and quick start         | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)                     | Full deployment procedure                | ✅ Production     |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md)                 | Credentials rotation runbook             | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md)                 | Incident diagnosis runbook               | ✅ Production     |
-| 04     | [Health Check Guide](04-health-check.md)                       | Post-deployment validation               | ✅ Production     |
-| **05** | **Architecture Decision Records**                              | **This document**                        | **✅ Production** |
+| #      | Document                          | Description                      | Status           |
+| ------ | --------------------------------- | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)               | Project overview and quick start | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md) | Full deployment procedure | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md) | Incident diagnosis runbook | ✅ Production     |
+| 04     | [Health Check Guide](04-health-check.md) | Post-deployment validation | ✅ Production     |
+| **05** | **Architecture Decision Records** | **This document**                | **✅ Production** |
 | 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md) | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ---
@@ -103,7 +103,8 @@ Always verify file permissions and ownership before running any command that tou
 
 ## ADR-000 — Blueprint Rather Than Turnkey Deployment
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -138,7 +139,8 @@ Commands and file paths shown throughout the documentation represent reference p
 
 ## ADR-001 — Docker Compose over Kubernetes
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -172,7 +174,8 @@ Use Docker Compose exclusively. Kubernetes is intentionally out of scope.
 
 ## ADR-002 — External Secrets via `--env-file`
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -201,13 +204,13 @@ Compose variable precedence (highest first):
 
 Effective source per component:
 
-|Component|What `--env-file` drives|Effective source|Driven by `--env-file`?|
+| Component | What `--env-file` drives | Effective source | Driven by `--env-file`? |
 |---|---|---|---|
-|`wazuh.master` / `wazuh.worker`|`${INDEXER_*}`, `${API_*}` in `environment:`|runtime env injection|✅ direct|
-|`wazuh.dashboard`|`${API_PASSWORD}` (→ `wazuh-wui`), `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:`|runtime env injection|✅ direct|
-|`wazuh.dashboard` (indexer auth hash)|bcrypt hash of `kibanaserver`|`internal_users.yml` (bind mount)|❌ literal hash|
-|`wazuh1/2/3.indexer`|—|`internal_users.yml` + `securityadmin.sh`|❌ never|
-|Bind-mounted configs (`opensearch_dashboards.yml`, `wazuh.yml`, `internal_users.yml`)|—|literal file content on host|❌ never|
+| `wazuh.master` / `wazuh.worker` | `${INDEXER_*}`, `${API_*}` in `environment:` | runtime env injection | ✅ direct |
+| `wazuh.dashboard` | `${API_PASSWORD}` (→ `wazuh-wui`), `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:` | runtime env injection | ✅ direct |
+| `wazuh.dashboard` (indexer auth hash) | bcrypt hash of `kibanaserver` | `internal_users.yml` (bind mount) | ❌ literal hash |
+| `wazuh1/2/3.indexer` | — | `internal_users.yml` + `securityadmin.sh` | ❌ never |
+| Bind-mounted configs (`opensearch_dashboards.yml`, `wazuh.yml`, `internal_users.yml`) | — | literal file content on host | ❌ never |
 
 ### The two-halves invariant
 
@@ -231,7 +234,8 @@ Every OpenSearch credential exists as two halves that must match:
 
 ## ADR-003 — Hybrid Volume Strategy: Named Volumes for Data, Bind Mounts for Configuration
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -281,7 +285,8 @@ Configuration files are operationally active artifacts — they are edited durin
 
 ## ADR-004 — Traefik SSL Termination
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -305,7 +310,8 @@ Internal container-to-container traffic (Dashboard → OpenSearch) retains TLS u
 
 ## ADR-005 — Accepted Architectural Limitations
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 
@@ -341,7 +347,8 @@ The following architectural limitations are intentionally accepted:
 
 ## ADR-006 — GitOps Deployment Model with Dokploy
 
-**Status:** Accepted **Date:** June 2026
+**Status:** Accepted
+**Date:** June 2026
 
 ### Context
 

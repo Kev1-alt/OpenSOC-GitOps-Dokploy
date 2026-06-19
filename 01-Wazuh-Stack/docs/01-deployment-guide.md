@@ -1,20 +1,22 @@
 # Deployment Guide — Wazuh Multi-Node Stack with Dokploy & Traefik
 
-|**Version**|1.0 — Reference Blueprint|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0 — Reference Blueprint |
+| ---------------- | ------------------------- |
+| **Author**       | Kevin YAKPOVI             |
+| **Last Updated** | June 2026                 |
+| **Status**       | Published                 |
 
 ---
-
 > [!IMPORTANT]
-> 
-> This document describes the v1 Reference Blueprint based on absolute host paths.
-> 
-> It was intentionally designed for transparency, troubleshooting simplicity, and learning purposes.
-> 
-> A future v2 blueprint will introduce bootstrap-based path abstraction for improved portability.
+>
+> This document describes the v1 Reference Blueprint
+> based on absolute host paths.
+>
+> It was intentionally designed for transparency,
+> troubleshooting simplicity, and learning purposes.
+>
+> A future v2 blueprint will introduce bootstrap-based
+> path abstraction for improved portability.
 
 ## Document Purpose
 
@@ -55,7 +57,7 @@ Part of the **OpenSOC GitOps Documentation Suite**.
 
 | #      | Document                                                             | Description                              | Status           |
 | ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| 00     | [README](../README.md)                                               | Project overview and quick start         | ✅ Production     |
 | **01** | **Deployment Guide**                                                 | **This document**                        | **✅ Production** |
 | 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
 | 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
@@ -589,7 +591,9 @@ volumes:
   wazuh-dashboard-custom:
 ```
 
-## Check other modifications like password secrets in the docker-compose model
+
+ Check other modifications like password secrets in the docker-compose model 
+---
 
 # Step 4 — Certificate Generation and Permissions
 
@@ -652,6 +656,8 @@ sudo cp -r \
 
 > [!CAUTION] Do **not** delete `config/wazuh_indexer_ssl_certs/` from the working directory. Certificates are served directly from this directory via bind mounts — removing them will break the stack on next restart.
 
+
+
 ---
 
 # Step 5 — Git Synchronization and Dokploy Configuration
@@ -709,11 +715,11 @@ git push origin --tags
 
 `--env-file` only resolves `${VAR}` references that appear in a service's `environment:` block in `docker-compose.yml`. It does **not** reach into bind-mounted configuration files (`opensearch_dashboards.yml`, `wazuh.yml`, `internal_users.yml`) — those carry literal values or bcrypt hashes that must be edited directly on the host.
 
-|Component|What `--env-file` drives|Literal / hash half (not driven by `--env-file`)|
+| Component | What `--env-file` drives | Literal / hash half (not driven by `--env-file`) |
 |---|---|---|
-|`wazuh.master` / `wazuh.worker`|`${INDEXER_*}`, `${API_*}` referenced in `environment:` — **direct**|—|
-|`wazuh.dashboard`|`${API_PASSWORD}` (→ `wazuh-wui`) and `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:` — **direct**|bcrypt hash of `kibanaserver` in `internal_users.yml`|
-|`wazuh1/2/3.indexer`|nothing|all credentials via `internal_users.yml` + `securityadmin.sh`|
+| `wazuh.master` / `wazuh.worker` | `${INDEXER_*}`, `${API_*}` referenced in `environment:` — **direct** | — |
+| `wazuh.dashboard` | `${API_PASSWORD}` (→ `wazuh-wui`) and `${DASHBOARD_PASSWORD}` (→ `kibanaserver`) in `environment:` — **direct** | bcrypt hash of `kibanaserver` in `internal_users.yml` |
+| `wazuh1/2/3.indexer` | nothing | all credentials via `internal_users.yml` + `securityadmin.sh` |
 
 > [!IMPORTANT] **The invariant behind the factory-credentials trap**
 > 
@@ -830,6 +836,7 @@ In Dokploy → **Domains → Add Domain**:
 4. **HTTPS** → Enabled (automatic Let's Encrypt via Traefik)
 
 Then click **Redeploy** to apply the domain configuration.
+
 
 ---
 

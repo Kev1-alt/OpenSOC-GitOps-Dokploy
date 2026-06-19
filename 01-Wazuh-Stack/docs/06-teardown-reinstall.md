@@ -1,10 +1,10 @@
 # Teardown & Clean Reinstall Runbook — Wazuh Multi-Node Stack
 
-|**Version**|1.0|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0           |
+| ---------------- | ------------- |
+| **Author**       | Kevin YAKPOVI |
+| **Last Updated** | June 2026     |
+| **Status**       | Published     |
 
 ---
 
@@ -31,15 +31,15 @@ This guide is based on the OpenSOC GitOps reference architecture (v1 — absolut
 
 Part of the OpenSOC GitOps Documentation Suite.
 
-| #      | Document                                                             | Description                      | Status           |
-| ------ | -------------------------------------------------------------------- | -------------------------------- | ---------------- |
-| 00     | [README](README.md)                                                  | Project overview and quick start | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure        | ✅ Production     |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook     | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook       | ✅ Production     |
-| 04     | [Health Check Guide](04-health-check.md)                             | Post-deployment validation       | ✅ Production     |
-| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs  | ✅ Production     |
-| **06** | **Teardown & Clean Reinstall Runbook**                               | **This document**                | **✅ Production** |
+| #      | Document                                       | Description                      | Status           |
+| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)                            | Project overview and quick start | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)     | Full deployment procedure        | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md) | Incident diagnosis runbook       | ✅ Production     |
+| 04     | [Health Check Guide](04-health-check.md)       | Post-deployment validation       | ✅ Production     |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs | ✅ Production |
+| **06** | **Teardown & Clean Reinstall Runbook**         | **This document**                | **✅ Production** |
 
 ### Intended Audience
 
@@ -158,7 +158,7 @@ The cleanest removal uses `docker compose down -v`, scoped to the project by `-p
 ```bash
 cd /home/user/OpenSOC-GitOps-Dokploy
 
-docker compose -p soccenter-wazuhstack
+docker compose -p soccenter-wazuhstack \
   --env-file /etc/dokploy/secrets/wazuh.env \
   -f ./01-Wazuh-Stack/wazuh-docker/docker-compose.yml \
   down -v --remove-orphans

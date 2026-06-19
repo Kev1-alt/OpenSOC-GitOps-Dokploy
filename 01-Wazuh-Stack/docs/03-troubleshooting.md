@@ -1,10 +1,10 @@
 # Troubleshooting Guide — Wazuh Multi-Node Stack
 
-|**Version**|1.0|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0           |
+| ---------------- | ------------- |
+| **Author**       | Kevin YAKPOVI |
+| **Last Updated** | June 2026     |
+| **Status**       | Published     |
 
 ---
 
@@ -24,7 +24,7 @@ Part of the OpenSOC GitOps Documentation Suite.
 
 | #      | Document                                                             | Description                              | Status           |
 | ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| 00     | [README](../README.md)                                               | Project overview and quick start         | ✅ Production     |
 | 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
 | 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
 | **03** | **Troubleshooting Guide**                                            | **This document**                        | **✅ Production** |
@@ -343,16 +343,15 @@ Verify the Dokploy Run Command uses:
 ```
 
 > [!IMPORTANT] **Why `--env-file` in the Run Command rather than `env_file` in `docker-compose.yml`**
-> 
+>
 > Passing `--env-file` via the Run Command ensures that all variables are fully resolved by Docker Compose before Wazuh and OpenSearch entrypoint scripts execute.
-> 
+>
 > Failure to do so may result in:
-> 
 > - Empty credentials
 > - OpenSearch authentication failures
 > - Dashboard startup failures
 > - Cluster initialization issues
-> 
+>
 > Note the scope: `--env-file` only drives `${VAR}` references in `environment:` blocks (master/worker/dashboard). It does **not** populate bind-mounted files (`internal_users.yml`, `opensearch_dashboards.yml`, `wazuh.yml`). See ADR-002 — Scope of `--env-file` injection.
 
 ---
@@ -448,7 +447,7 @@ docker exec wazuh1.indexer curl -k -s \
 ```
 
 > [!IMPORTANT] **Check the two halves of the credential**
-> 
+>
 > An `Authentication finally failed` can mean the plaintext half (env) and the hash half (`internal_users.yml`) are out of sync. If the manual test above returns `401` with what you believe is the correct password, the bcrypt hash in `internal_users.yml` does not match — re-apply it with `securityadmin.sh`. If a **factory** password still authenticates (`admin:SecretPassword` → `200`), the hash was never rotated. See [Health Check — Check 0](04-health-check.md) and ADR-002.
 
 ---
@@ -498,21 +497,21 @@ Done with success
 ```
 
 > [!WARNING] **Silent Failure — Certificate Permissions**
-> 
+>
 > If `securityadmin.sh` exits without `Done with success` and without a clear error message, the issue is frequently caused by certificate file permissions.
-> 
+>
 > In this reference architecture, certificates are stored under an absolute path:
-> 
+>
 > ```
 > /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/
 > ```
-> 
+>
 > and mounted into the containers using bind mounts.
-> 
+>
 > Certificate files must be readable by the `wazuh-indexer` process (UID 1000 inside the container).
 
 > [!CAUTION] **`Done with success` does not prove credentials changed**
-> 
+>
 > `securityadmin.sh` returns `Done with success` even when it applies an `internal_users.yml` that still holds the factory hashes. Always confirm with the Default Credentials Guard: `admin:SecretPassword` must return `401` (see [Health Check — Check 0](04-health-check.md)).
 
 ### Verify permissions
@@ -580,9 +579,9 @@ If verification fails, all certificates must be regenerated from the same CA.
 ### Resolution
 
 > [!CAUTION]
-> 
+>
 > A full certificate regeneration is required.
-> 
+>
 > Do not replace individual certificates. All files must originate from the same certificate generation process.
 
 Follow the complete procedure documented in:
@@ -677,14 +676,14 @@ echo "Token: $TOKEN"
 
 ## References
 
-|Resource|URL|
-|---|---|
-|Wazuh Documentation|https://documentation.wazuh.com|
-|OpenSearch Security Documentation|https://opensearch.org/docs/latest/security/|
-|Dokploy Documentation|https://docs.dokploy.com|
-|Traefik Documentation|https://doc.traefik.io/traefik/|
-|Secret Rotation Guide|[02-secret-rotation.md](https://claude.ai/chat/02-secret-rotation.md)|
-|Deployment Guide|[01-deployment-guide.md](https://claude.ai/chat/01-deployment-guide.md)|
+| Resource                          | URL                                              |
+| --------------------------------- | ------------------------------------------------ |
+| Wazuh Documentation               | https://documentation.wazuh.com                  |
+| OpenSearch Security Documentation | https://opensearch.org/docs/latest/security/     |
+| Dokploy Documentation             | https://docs.dokploy.com                         |
+| Traefik Documentation             | https://doc.traefik.io/traefik/                  |
+| Secret Rotation Guide             | [02-secret-rotation.md](02-secret-rotation.md)   |
+| Deployment Guide                  | [01-deployment-guide.md](01-deployment-guide.md) |
 
 ---
 

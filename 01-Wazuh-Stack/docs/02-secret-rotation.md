@@ -1,10 +1,10 @@
 # Secret Rotation Guide — Wazuh Multi-Node Stack
 
-|**Version**|1.0|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0           |
+| ---------------- | ------------- |
+| **Author**       | Kevin YAKPOVI |
+| **Last Updated** | June 2026     |
+| **Status**       | Published     |
 
 ---
 
@@ -28,7 +28,7 @@ Part of the **OpenSOC GitOps Documentation Suite**.
 
 | #      | Document                                                             | Description                              | Status           |
 | ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
+| 00     | [README](../README.md)                                               | Project overview and quick start         | ✅ Production     |
 | 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
 | **02** | **Secret Rotation Guide**                                            | **This document**                        | **✅ Production** |
 | 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
@@ -123,10 +123,10 @@ A rotation touches a credential in several places. To avoid silent drift, partia
 
 Every OpenSearch-side credential exists in **two places that must always match**:
 
-|Half|Where it lives|How it is changed|
+| Half | Where it lives | How it is changed |
 |---|---|---|
-|**Plaintext** (presented at connection time)|injected at runtime from `wazuh.env` via `--env-file` into the service `environment:`|edit `wazuh.env`|
-|**Bcrypt hash** (verified by the indexer)|`config/wazuh_indexer/internal_users.yml`, bind-mounted into the indexers|edit the hash, then apply with `securityadmin.sh`|
+| **Plaintext** (presented at connection time) | injected at runtime from `wazuh.env` via `--env-file` into the service `environment:` | edit `wazuh.env` |
+| **Bcrypt hash** (verified by the indexer) | `config/wazuh_indexer/internal_users.yml`, bind-mounted into the indexers | edit the hash, then apply with `securityadmin.sh` |
 
 `--env-file` only ever updates the **plaintext half**. It never touches `internal_users.yml`. A rotation that edits `wazuh.env` but not the hash leaves the cluster authenticating against the **old (or factory) hash** — and nothing in the logs flags it. This is why every indexer-side rotation below updates `internal_users.yml` **and** runs `securityadmin.sh`, then validates that the old/factory password is rejected.
 

@@ -1,10 +1,10 @@
 # Health Check Guide — Wazuh Multi-Node Stack
 
-|**Version**|1.0|
-|---|---|
-|**Author**|Kevin YAKPOVI|
-|**Last Updated**|June 2026|
-|**Status**|Published|
+| **Version**      | 1.0           |
+| ---------------- | ------------- |
+| **Author**       | Kevin YAKPOVI |
+| **Last Updated** | June 2026     |
+| **Status**       | Published     |
 
 ---
 
@@ -30,15 +30,15 @@ This guide is part of the OpenSOC GitOps reference architecture. Container names
 
 Part of the OpenSOC GitOps Documentation Suite.
 
-| #      | Document                                                             | Description                              | Status           |
-| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](README.md)                                                  | Project overview and quick start         | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
-| **04** | **Health Check Guide**                                               | **This document**                        | **✅ Production** |
-| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
-| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
+| #      | Document                                       | Description                      | Status           |
+| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)                            | Project overview and quick start | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)     | Full deployment procedure        | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md) | Incident diagnosis runbook       | ✅ Production     |
+| **04** | **Health Check Guide**                         | **This document**                | **✅ Production** |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs | ✅ Production |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md) | Full teardown and from-scratch reinstall | ✅ Production |
 
 ### Intended Audience
 
@@ -143,11 +143,11 @@ The deployment is considered healthy when all of the following conditions are me
 
 The factory defaults are public and identical on every default install:
 
-|Account|Factory value|
+| Account | Factory value |
 |---|---|
-|`admin` (Indexer)|`SecretPassword`|
-|`wazuh-wui` (API)|`MyS3cr37P450r.*-`|
-|`kibanaserver` (Dashboard)|`kibanaserver`|
+| `admin` (Indexer) | `SecretPassword` |
+| `wazuh-wui` (API) | `MyS3cr37P450r.*-` |
+| `kibanaserver` (Dashboard) | `kibanaserver` |
 
 Each factory credential **must be rejected**. A `200` (or a valid token) is a **critical finding**.
 
@@ -165,11 +165,11 @@ docker exec wazuh.master curl -k -s -o /dev/null -w "%{http_code}\n" \
 # Expected: 401
 ```
 
-| Result             | Interpretation                                     | Action                                                   |
-| ------------------ | -------------------------------------------------- | -------------------------------------------------------- |
-| `401` on all       | Factory credentials are dead                       | ✅ Continue to Check 1                                    |
-| `200` on indexer   | `admin` hash never rotated in `internal_users.yml` | Rotate now — [Secret Rotation §1](02-secret-rotation.md) |
-| `200`/token on API | `wazuh-wui` never rotated                          | Rotate now — [Secret Rotation §2](02-secret-rotation.md) |
+| Result | Interpretation | Action |
+|---|---|---|
+| `401` on all | Factory credentials are dead | ✅ Continue to Check 1 |
+| `200` on indexer | `admin` hash never rotated in `internal_users.yml` | Rotate now — [Secret Rotation §1](02-secret-rotation.md) |
+| `200`/token on API | `wazuh-wui` never rotated | Rotate now — [Secret Rotation §2](02-secret-rotation.md) |
 
 > [!CAUTION] A passing `green` cluster with live factory credentials is **not** a healthy deployment. The plaintext half of the credential may have been changed in `wazuh.env` while the bcrypt hash in `internal_users.yml` still holds the factory value — `--env-file` never touches that hash. See [ADR-002 — Scope of `--env-file` injection](05-architecture-decision-records.md).
 
@@ -360,16 +360,16 @@ Verify the following:
 
 ## Quick Troubleshooting Reference
 
-| Symptom                       | Possible Cause                                 | Next Step                                                          |
-| ----------------------------- | ---------------------------------------------- | ------------------------------------------------------------------ |
-| Factory password returns 200  | Credential hash never rotated                  | [Secret Rotation Guide](02-secret-rotation.md)                     |
-| HTTP 502 from Traefik         | Dashboard container unavailable                | Check 1 → Check 7                                                  |
-| Login failure                 | Credential mismatch                            | See [Secret Rotation Guide](02-secret-rotation.md)                 |
-| Empty Dashboard / no alerts   | OpenSearch cluster not ready or Filebeat issue | Check 2 → Check 5                                                  |
-| Cluster status yellow         | Missing replica node                           | Check 3                                                            |
-| Cluster status red            | Node or shard allocation failure               | Check 3 → Check 4                                                  |
-| Missing alerts                | Filebeat indexing failure                      | Check 5                                                            |
-| Dashboard unreachable         | Traefik routing or certificate issue           | Check 8                                                            |
+| Symptom                       | Possible Cause                                 | Next Step                                                   |
+| ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
+| Factory password returns 200  | Credential hash never rotated                  | [Secret Rotation Guide](02-secret-rotation.md)              |
+| HTTP 502 from Traefik         | Dashboard container unavailable                | Check 1 → Check 7                                           |
+| Login failure                 | Credential mismatch                            | See [Secret Rotation Guide](02-secret-rotation.md)          |
+| Empty Dashboard / no alerts   | OpenSearch cluster not ready or Filebeat issue | Check 2 → Check 5                                           |
+| Cluster status yellow         | Missing replica node                           | Check 3                                                     |
+| Cluster status red            | Node or shard allocation failure               | Check 3 → Check 4                                           |
+| Missing alerts                | Filebeat indexing failure                      | Check 5                                                     |
+| Dashboard unreachable         | Traefik routing or certificate issue           | Check 8                                                     |
 | Variables empty in containers | `--env-file` misconfigured                     | See [Troubleshooting Guide — Case 1 Step 4](03-troubleshooting.md) |
 
 ---
@@ -382,24 +382,24 @@ The OpenSOC GitOps blueprint uses a hybrid storage model:
 - Runtime data is stored in named Docker volumes
 - Secrets remain external to Git in `/etc/dokploy/secrets/`
 
-|File / Component|Location|Purpose|In Git|
-|---|---|---|:-:|
-|`wazuh.env`|`/etc/dokploy/secrets/`|Credentials and environment variables|❌|
-|`internal_users.yml`|`config/wazuh_indexer/` (bind mount)|OpenSearch Security users (bcrypt hashes)|❌|
-|`opensearch_dashboards.yml`|`config/wazuh_dashboard/` (bind mount)|Dashboard configuration|✅|
-|`wazuh.yml`|`config/wazuh_dashboard/` (bind mount)|Dashboard ↔ API integration|✅|
-|`ossec.conf`|`config/wazuh_cluster/` (bind mount)|Manager cluster configuration|✅|
-|TLS certificates|`config/wazuh_indexer_ssl_certs/` (bind mount)|Internal TLS trust chain|❌|
-|`docker-compose.yml`|Repository|Stack blueprint|✅|
-|`wazuh*.indexer.yml`|Repository|OpenSearch node configuration|✅|
-|OpenSearch data|Named Docker volumes|Cluster runtime data|❌|
-|Manager logs|Named Docker volumes|Wazuh runtime data|❌|
-|Dashboard runtime data|Named Docker volumes|Dashboard state|❌|
+| File / Component | Location | Purpose | In Git |
+|------------------|----------|----------|:------:|
+| `wazuh.env` | `/etc/dokploy/secrets/` | Credentials and environment variables | ❌ |
+| `internal_users.yml` | `config/wazuh_indexer/` (bind mount) | OpenSearch Security users (bcrypt hashes) | ❌ |
+| `opensearch_dashboards.yml` | `config/wazuh_dashboard/` (bind mount) | Dashboard configuration | ✅ |
+| `wazuh.yml` | `config/wazuh_dashboard/` (bind mount) | Dashboard ↔ API integration | ✅ |
+| `ossec.conf` | `config/wazuh_cluster/` (bind mount) | Manager cluster configuration | ✅ |
+| TLS certificates | `config/wazuh_indexer_ssl_certs/` (bind mount) | Internal TLS trust chain | ❌ |
+| `docker-compose.yml` | Repository | Stack blueprint | ✅ |
+| `wazuh*.indexer.yml` | Repository | OpenSearch node configuration | ✅ |
+| OpenSearch data | Named Docker volumes | Cluster runtime data | ❌ |
+| Manager logs | Named Docker volumes | Wazuh runtime data | ❌ |
+| Dashboard runtime data | Named Docker volumes | Dashboard state | ❌ |
 
 > [!IMPORTANT]
-> 
+>
 > Configuration files and certificates are intentionally bind-mounted to simplify operational tasks such as certificate renewal, secret rotation, and cluster tuning.
-> 
+>
 > Runtime data remains stored in named Docker volumes and should never be modified directly.
 
 ---
