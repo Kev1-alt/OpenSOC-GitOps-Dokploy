@@ -348,6 +348,7 @@ Expected:
 
 | Limitation                                | Notes                                                             |
 | ----------------------------------------- | ----------------------------------------------------------------- |
+| Absolute host paths (v1)                  | Bind mounts use absolute paths tied to the host directory layout — less portable across environments than the planned v2 (bootstrap-based path abstraction) |
 | Single Dashboard instance                 | No Dashboard-layer HA                                             |
 | No automatic certificate rotation         | Manual rotation documented in **Secret Rotation Guide**           |
 | No external secrets manager               | Vault / AWS Secrets Manager out of scope                          |
