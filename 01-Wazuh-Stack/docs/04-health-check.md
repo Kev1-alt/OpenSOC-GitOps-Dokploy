@@ -404,7 +404,7 @@ The OpenSOC GitOps blueprint uses a hybrid storage model:
 
 ---
 
-© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Analyst · Open Source SOC Builder
 
 OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 

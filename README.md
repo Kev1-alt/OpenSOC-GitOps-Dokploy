@@ -99,13 +99,13 @@ Engineers are expected to adapt these examples to their own infrastructure, secu
 
 ## 📦 Modules
 
-| #   | Module                              | Role                                          | Status      | Docs                                                              |
-| --- | ----------------------------------- | --------------------------------------------- | ----------- | ----------------------------------------------------------------- |
-| 01  | [Wazuh Multi-Node](01-Wazuh-Stack/) | SIEM · Log Management · Agent-based Detection | ✅ Published | [README](01-Wazuh-Stack/README.md) · [Docs](01-Wazuh-Stack/docs/) |
-| 02  | Suricata                            | Network IDS · Traffic Analysis                | 🔄 Coming   | —                                                                 |
-| 03  | Shuffle SOAR                        | Alert Automation · Playbooks · Orchestration  | 🔄 Coming   | —                                                                 |
-| 04  | TheHive + Cortex                    | Incident Response · Threat Intelligence       | 🔄 Coming   | —                                                                 |
-| 05  | Discord Alerting                    | Real-time SOC Notifications                   | 🔄 Coming   | —                                                                 |
+| #   | Module                                 | Role                                          | Status      | Docs                                                                  |
+| --- | -------------------------------------- | --------------------------------------------- | ----------- | --------------------------------------------------------------------- |
+| 01  | [Wazuh Multi-Node](01-Wazuh-Stack/)    | SIEM · Log Management · Agent-based Detection | ✅ Published | [README](01-Wazuh-Stack/README.md) · [Docs](01-Wazuh-Stack/docs/)     |
+| 02  | Suricata                               | Network IDS · Traffic Analysis                | 🔄 Coming   | —                                                                     |
+| 03  | Shuffle SOAR                           | Alert Automation · Playbooks · Orchestration  | 🔄 Coming   | —                                                                     |
+| 04  | TheHive + Cortex                       | Incident Response · Threat Intelligence       | 🔄 Coming   | —                                                                     |
+| 05  | Discord Alerting                       | Real-time SOC Notifications                   | 🔄 Coming   | —                                                                     |
 
 ---
 
@@ -138,7 +138,7 @@ Consistent across all modules:
 - Least privilege by design
 
 > [!CAUTION] Never commit across any module:
-> 
+>
 > - `.env` files or environment variables
 > - TLS certificates or private keys
 > - Internal user configuration files
@@ -146,7 +146,7 @@ Consistent across all modules:
 > - Any file from `/etc/dokploy/secrets/`
 
 > [!WARNING] **Rotate factory credentials before exposure (all modules)**
-> 
+>
 > Upstream images frequently ship public factory credentials. A stack left on defaults can start cleanly and report healthy while protected only by published passwords. Rotate before exposing any service. For Wazuh specifically, see [Health Check — Check 0](01-Wazuh-Stack/docs/04-health-check.md).
 
 ---
@@ -157,7 +157,8 @@ Each module is independently deployable. Start with the SIEM foundation:
 
 ### 1. Deploy Wazuh (SIEM core)
 
-→ [01-Wazuh-Stack/README.md](01-Wazuh-Stack/README.md) → [Deployment Guide](01-Wazuh-Stack/docs/01-deployment-guide.md)
+→ [01-Wazuh-Stack/README.md](01-Wazuh-Stack/README.md)
+→ [Deployment Guide](01-Wazuh-Stack/docs/01-deployment-guide.md)
 
 ### Recommended deployment order
 
@@ -192,13 +193,13 @@ All modules share the following base requirements:
 
 Each module ships with its own documentation suite:
 
-| Module           | Deployment                                      | Secret Rotation                                | Troubleshooting                                | Health Check                                | ADR                                                          |
-| ---------------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------------------- | ------------------------------------------------------------ |
+| Module           | Deployment                                      | Secret Rotation                                | Troubleshooting                                | Health Check                                | ADR                                |
+| ---------------- | ----------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- | ------------------------------------------- | ---------------------------------- |
 | Wazuh            | [✅](01-Wazuh-Stack/docs/01-deployment-guide.md) | [✅](01-Wazuh-Stack/docs/02-secret-rotation.md) | [✅](01-Wazuh-Stack/docs/03-troubleshooting.md) | [✅](01-Wazuh-Stack/docs/04-health-check.md) | [✅](01-Wazuh-Stack/docs/05-architecture-decision-records.md) |
-| Suricata         | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
-| Shuffle SOAR     | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
-| TheHive + Cortex | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                                           |
-| Discord          | 🔄                                              | —                                              | 🔄                                             | 🔄                                          | 🔄                                                           |
+| Suricata         | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
+| Shuffle SOAR     | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
+| TheHive + Cortex | 🔄                                              | 🔄                                             | 🔄                                             | 🔄                                          | 🔄                                 |
+| Discord          | 🔄                                              | —                                              | 🔄                                             | 🔄                                          | 🔄                                 |
 
 The Wazuh module also ships a [Teardown & Clean Reinstall Runbook](01-Wazuh-Stack/docs/06-teardown-reinstall.md) for full removal and from-scratch reinstallation.
 
@@ -244,7 +245,6 @@ This repository uses a dual-license model:
 - **Documentation** (README files, `/docs`, runbooks, guides, and ADRs) is licensed under **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
 
 See:
-
 - `LICENSE`
 - `LICENSE-DOCS`
 
@@ -252,7 +252,7 @@ See:
 
 ## Maintainer
 
-**Kevin YAKPOVI** — Security Engineer · SOC Automation · Open Source SOC Builder
+**Kevin YAKPOVI** — Security Analyst · SOC Automation · Open Source SOC Builder
 
 - GitHub: [github.com/Kev1-alt](https://github.com/Kev1-alt)
 - LinkedIn: [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)

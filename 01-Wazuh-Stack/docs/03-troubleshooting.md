@@ -22,15 +22,15 @@ This guide is part of the OpenSOC GitOps reference architecture. It documents th
 
 Part of the OpenSOC GitOps Documentation Suite.
 
-| #      | Document                                                             | Description                              | Status           |
-| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](../README.md)                                               | Project overview and quick start         | ✅ Production     |
-| 01     | [Deployment Guide](01-deployment-guide.md)                           | Full deployment procedure                | ✅ Production     |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
-| **03** | **Troubleshooting Guide**                                            | **This document**                        | **✅ Production** |
-| 04     | [Health Check Guide](04-health-check.md)                             | Post-deployment validation               | ✅ Production     |
-| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
-| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
+| #      | Document                                       | Description                      | Status           |
+| ------ | ---------------------------------------------- | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)                            | Project overview and quick start | ✅ Production     |
+| 01     | [Deployment Guide](01-deployment-guide.md)     | Full deployment procedure        | ✅ Production     |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md) | Credentials rotation runbook     | ✅ Production     |
+| **03** | **Troubleshooting Guide**                      | **This document**                | **✅ Production** |
+| 04     | [Health Check Guide](04-health-check.md)       | Post-deployment validation       | ✅ Production     |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs | ✅ Production |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md) | Full teardown and from-scratch reinstall | ✅ Production |
 
 ### Intended Audience
 
@@ -687,7 +687,7 @@ echo "Token: $TOKEN"
 
 ---
 
-© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Analyst · Open Source SOC Builder
 
 OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 

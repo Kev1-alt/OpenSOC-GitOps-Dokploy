@@ -55,15 +55,15 @@ These examples are intended to be reviewed and adapted by engineers according to
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #      | Document                                                             | Description                              | Status           |
-| ------ | -------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| 00     | [README](../README.md)                                               | Project overview and quick start         | ✅ Production     |
-| **01** | **Deployment Guide**                                                 | **This document**                        | **✅ Production** |
-| 02     | [Secret Rotation Guide](02-secret-rotation.md)                       | Credentials rotation runbook             | ✅ Production     |
-| 03     | [Troubleshooting Guide](03-troubleshooting.md)                       | Incident diagnosis runbook               | ✅ Production     |
-| 04     | [Health Check Guide](04-health-check.md)                             | Post-deployment validation               | ✅ Production     |
-| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs          | ✅ Production     |
-| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall | ✅ Production     |
+| #      | Document                                                           | Description                      | Status           |
+| ------ | ------------------------------------------------------------------ | -------------------------------- | ---------------- |
+| 00     | [README](../README.md)                                                | Project overview and quick start | ✅ Production     |
+| **01** | **Deployment Guide**                                               | **This document**                | **✅ Production** |
+| 02     | [Secret Rotation Guide](02-secret-rotation.md)                  | Credentials rotation runbook     | ✅ Production     |
+| 03     | [Troubleshooting Guide](03-troubleshooting.md)                        | Incident diagnosis runbook       | ✅ Production     |
+| 04     | [Health Check Guide](04-health-check.md)                              | Post-deployment validation       | ✅ Production     |
+| 05     | [Architecture Decision Records](05-architecture-decision-records.md) | Design rationale and trade-offs  | ✅ Production     |
+| 06     | [Teardown & Clean Reinstall Runbook](06-teardown-reinstall.md) | Full teardown and from-scratch reinstall | ✅ Production     |
 
 ### Audience
 
@@ -283,7 +283,7 @@ config/wazuh_indexer_ssl_certs/
 **/config/wazuh_dashboard_certs/
 # internal_users.yml — real bcrypt hashes must never be committed
 config/wazuh_indexer/internal_users.yml
-config/wazuh_dashboard/wazuh.yml
+
 # Persistent data & logs
 data/
 logs/
@@ -939,7 +939,7 @@ Users are responsible for reviewing, adapting, and validating all configurations
 
 ---
 
-© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Analyst · Open Source SOC Builder
 
 OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 

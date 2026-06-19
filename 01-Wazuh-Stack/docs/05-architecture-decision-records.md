@@ -375,7 +375,7 @@ Use Git as the single source of truth for infrastructure definitions and Dokploy
 
 ---
 
-© 2026 Kevin YAKPOVI · Security Engineer · Open Source SOC Builder
+© 2026 Kevin YAKPOVI · Security Analyst · Open Source SOC Builder
 
 OpenSOC GitOps Dokploy Blueprint — https://github.com/Kev1-alt/OpenSOC-GitOps-Dokploy
 

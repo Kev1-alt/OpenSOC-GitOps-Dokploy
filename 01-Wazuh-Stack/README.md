@@ -116,7 +116,7 @@ Absolute bind mounts (configuration & certificates)
 - Least privilege by design
 
 > [!CAUTION] Never commit:
-> 
+>
 > - `.env` files or environment variables
 > - TLS certificates or private keys
 > - `internal_users.yml`
@@ -124,25 +124,33 @@ Absolute bind mounts (configuration & certificates)
 > - Any file from `/etc/dokploy/secrets/`
 
 > [!WARNING] **Rotate factory credentials before exposure**
-> 
-> The default `wazuh-docker` install ships public factory passwords (`admin:SecretPassword`, `kibanaserver:kibanaserver`, `wazuh-wui:MyS3cr37P450r.*-`). A stack left on these starts cleanly and reports `green` while protected only by published passwords. Rotate all three before exposing the Dashboard, then confirm with [Health Check — Check 0](04-health-check.md).
+>
+> The default `wazuh-docker` install ships public factory passwords (`admin:SecretPassword`, `kibanaserver:kibanaserver`, `wazuh-wui:MyS3cr37P450r.*-`). A stack left on these starts cleanly and reports `green` while protected only by published passwords. Rotate all three before exposing the Dashboard, then confirm with [Health Check — Check 0](docs/04-health-check.md).
 
 ---
 
 ## Features
 
-✔ Multi-node Wazuh cluster reference architecture ✔ GitOps deployment model ✔ Traefik SSL termination ✔ Named Docker volumes for runtime data ✔ Reproducible deployment examples ✔ Dokploy integration ✔ Production-oriented reference structure ✔ Operational runbooks (secret rotation, health check, troubleshooting) ✔ Architecture Decision Records (ADRs)
+✔ Multi-node Wazuh cluster reference architecture
+✔ GitOps deployment model
+✔ Traefik SSL termination
+✔ Named Docker volumes for runtime data
+✔ Reproducible deployment examples
+✔ Dokploy integration
+✔ Production-oriented reference structure
+✔ Operational runbooks (secret rotation, health check, troubleshooting)
+✔ Architecture Decision Records (ADRs)
 
 ---
 
 ### Requirements
 
-|**Resource**|**Minimum**|**Recommended**|
-|---|---|---|
-|**RAM**|16 GB|32 GB|
-|**CPU**|4 vCPU|8 vCPU|
-|**Storage**|100 GB SSD|200 GB NVMe|
-|**OS**|Ubuntu 22.04 / Debian 12|Ubuntu 22.04|
+| **Resource** | **Minimum**              | **Recommended** |
+| ------------ | ------------------------ | --------------- |
+| **RAM**      | 16 GB                    | 32 GB           |
+| **CPU**      | 4 vCPU                   | 8 vCPU          |
+| **Storage**  | 100 GB SSD               | 200 GB NVMe     |
+| **OS**       | Ubuntu 22.04 / Debian 12 | Ubuntu 22.04    |
 
 ---
 
@@ -189,8 +197,8 @@ OpenSOC-GitOps-Dokploy/
 ## ⚙️ Quick Start
 
 > [!IMPORTANT] The steps below illustrate the deployment model documented in this blueprint. Adapt all values — domain names, passwords, project names, paths — to your environment before executing any command.
-> 
-> For the complete procedure, see the [Deployment Guide](01-deployment-guide.md).
+>
+> For the complete procedure, see the [Deployment Guide](docs/01-deployment-guide.md).
 
 ### 1. Prepare the repository
 
@@ -241,7 +249,7 @@ sudo chmod 600 /etc/dokploy/secrets/wazuh.env
 sudo chown root:root /etc/dokploy/secrets/wazuh.env
 ```
 
-> [!NOTE] For the very first bring-up you may deploy with the `wazuh-docker` factory defaults to validate assembly, but you must rotate all three credentials (both the plaintext in `wazuh.env` **and** the bcrypt hash in `internal_users.yml`) before exposing the stack. See [Secret Rotation Guide](02-secret-rotation.md).
+> [!NOTE] For the very first bring-up you may deploy with the `wazuh-docker` factory defaults to validate assembly, but you must rotate all three credentials (both the plaintext in `wazuh.env` **and** the bcrypt hash in `internal_users.yml`) before exposing the stack. See [Secret Rotation Guide](docs/02-secret-rotation.md).
 
 ### 3. Deploy via Dokploy
 
@@ -252,11 +260,11 @@ compose -p <your-project-name> --env-file /etc/dokploy/secrets/wazuh.env -f ./01
 ```
 
 > [!NOTE] **Why `--env-file` in the Run Command?**
-> 
+>
 > This ensures all variables are fully resolved by Docker Compose before Wazuh and OpenSearch entrypoint scripts execute — preventing initialization failures common in multi-node clusters when `env_file` is defined inside `docker-compose.yml` instead.
-> 
-> `--env-file` only drives `${VAR}` references in `environment:` blocks; it does not populate bind-mounted files such as `internal_users.yml`. See [ADR-002](05-architecture-decision-records.md).
-> 
+>
+> `--env-file` only drives `${VAR}` references in `environment:` blocks; it does not populate bind-mounted files such as `internal_users.yml`. See [ADR-002](docs/05-architecture-decision-records.md).
+>
 > The `-p <your-project-name>` flag controls the prefix of all Docker resources (volumes, containers, networks). Choose a consistent name before deploying — changing it later requires volume migration.
 
 ### 4. Access the Dashboard
@@ -289,7 +297,7 @@ https://wazuh.your-domain.com
 - Automatic Let's Encrypt certificate renewal
 - Eliminates SSL conflicts with the Wazuh Dashboard container
 
-→ Full rationale in [Architecture Decision Records](05-architecture-decision-records.md)
+→ Full rationale in [Architecture Decision Records](docs/05-architecture-decision-records.md)
 
 ---
 
@@ -297,15 +305,15 @@ https://wazuh.your-domain.com
 
 Part of the **OpenSOC GitOps Documentation Suite**.
 
-| #   | Document                                                                   | Description                              |
-| --- | -------------------------------------------------------------------------- | ---------------------------------------- |
-| 00  | README (this file)                                                         | Project overview and quick start         |
-| 01  | [Deployment Guide](/docs/01-deployment-guide.md)                           | Full step-by-step deployment procedure   |
-| 02  | [Secret Rotation Guide](/docs/02-secret-rotation.md)                       | Credentials rotation runbook             |
-| 03  | [Troubleshooting Guide](/docs/03-troubleshooting.md)                       | Incident diagnosis runbook               |
-| 04  | [Health Check Guide](/docs/04-health-check.md)                             | Post-deployment validation checklist     |
-| 05  | [Architecture Decision Records](/docs/05-architecture-decision-records.md) | Design rationale and trade-offs          |
-| 06  | [Teardown & Clean Reinstall Runbook](/docs/06-teardown-reinstall.md)       | Full teardown and from-scratch reinstall |
+| #   | Document                      | Description                            |
+| --- | ----------------------------- | -------------------------------------- |
+| 00  | README (this file)            | Project overview and quick start       |
+| 01  | [Deployment Guide](docs/01-deployment-guide.md) | Full step-by-step deployment procedure |
+| 02  | [Secret Rotation Guide](docs/02-secret-rotation.md) | Credentials rotation runbook           |
+| 03  | [Troubleshooting Guide](docs/03-troubleshooting.md) | Incident diagnosis runbook             |
+| 04  | [Health Check Guide](docs/04-health-check.md) | Post-deployment validation checklist   |
+| 05  | [Architecture Decision Records](docs/05-architecture-decision-records.md) | Design rationale and trade-offs        |
+| 06  | [Teardown & Clean Reinstall Runbook](docs/06-teardown-reinstall.md) | Full teardown and from-scratch reinstall |
 
 ---
 
@@ -332,19 +340,19 @@ Expected:
 
 > [!NOTE] Throughout the docs, commands use the short service name (`wazuh1.indexer`) for readability. The real container name looks like `soccenter-wazuhstack-a1b2c3-wazuh1.indexer-1` — resolve it as shown above when addressing containers from the host.
 
-→ Full validation checklist, including the **Default Credentials Guard**, in the [Health Check Guide](/docs/04-health-check.md)
+→ Full validation checklist, including the **Default Credentials Guard**, in the [Health Check Guide](docs/04-health-check.md)
 
 ---
 
 ## 🚧 Known Limitations
 
-| Limitation                                | Notes                                                                                        |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Single Dashboard instance                 | No Dashboard-layer HA                                                                        |
-| No automatic certificate rotation         | Manual rotation documented in **Secret Rotation Guide**                                      |
-| No external secrets manager               | Vault / AWS Secrets Manager out of scope                                                     |
-| No Kubernetes support                     | Intentional — see [Architecture Decision Records](/docs/05-architecture-decision-records.md) |
-| Manual OpenSearch security initialization | Required by OpenSearch Security plugin design                                                |
+| Limitation                                | Notes                                                             |
+| ----------------------------------------- | ----------------------------------------------------------------- |
+| Single Dashboard instance                 | No Dashboard-layer HA                                             |
+| No automatic certificate rotation         | Manual rotation documented in **Secret Rotation Guide**           |
+| No external secrets manager               | Vault / AWS Secrets Manager out of scope                          |
+| No Kubernetes support                     | Intentional — see [Architecture Decision Records](docs/05-architecture-decision-records.md) |
+| Manual OpenSearch security initialization | Required by OpenSearch Security plugin design                     |
 
 → Full rationale in **Architecture Decision Records**
 
@@ -393,7 +401,6 @@ This repository uses a dual-license model:
 - **Documentation** (README files, `/docs`, runbooks, guides, and ADRs) is licensed under **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
 
 See:
-
 - `LICENSE`
 - `LICENSE-DOCS`
 
@@ -401,7 +408,7 @@ See:
 
 ## Maintainer
 
-**Kevin YAKPOVI** — Security Engineer · Open Source SOC Builder
+**Kevin YAKPOVI** — Security Analyst · Open Source SOC Builder
 
 - GitHub: [github.com/Kev1-alt](https://github.com/Kev1-alt)
 - LinkedIn: [linkedin.com/in/kevin-yakpovi-384b4619a](https://linkedin.com/in/kevin-yakpovi-384b4619a)
