@@ -326,7 +326,7 @@ IDX1=$(docker ps --filter "name=wazuh1.indexer" --format '{{.Names}}' | head -1)
 
 docker exec "$IDX1" curl -k \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 ```
 
 Expected:

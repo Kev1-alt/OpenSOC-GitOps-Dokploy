@@ -409,7 +409,7 @@ After each secret rotation, verify all components in the following order.
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<NEW_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 ```
 
 Expected:
@@ -428,7 +428,7 @@ A rotation is only complete when the **old/factory** password stops working. Ver
 # Indexer admin — factory value must return 401
 docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
   -u admin:SecretPassword \
-  https://localhost:9200/_cluster/health
+  https://wazuh1.indexer:9200/_cluster/health
 # Expected: 401   (200 = factory hash still live → rotation incomplete)
 
 # Wazuh API — factory value must return 401

@@ -208,6 +208,10 @@ Review container memory consumption, CPU utilization, and abnormal resource patt
 
 ## Case 1 — 502 Bad Gateway
 
+> [!NOTE] **Why indexer commands target `wazuh1.indexer`, not `localhost`**
+>
+> `wazuh1.indexer.yml` sets `network.host: wazuh1.indexer`, so OpenSearch binds only to the IP associated with that Docker hostname — **not** to loopback. Running `curl https://localhost:9200/...` — even from inside the `wazuh1.indexer` container itself — returns `Connection refused`. This is expected, not a fault. Every indexer command in this guide targets `https://wazuh1.indexer:9200` for that reason. If you ever see `Connection refused` on `localhost:9200`, check the URL before assuming the cluster is down.
+
 ### Diagnosis in Under 2 Minutes
 
 **Step 0 — Verify Traefik**
@@ -275,7 +279,7 @@ If the indexer is down, there is no point continuing up the chain.
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 ```
 
 | Result               | Interpretation                  | Action                                             |
@@ -290,7 +294,7 @@ docker exec wazuh1.indexer curl -k -s \
 # Verify node membership
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cat/nodes?v
+  https://wazuh1.indexer:9200/_cat/nodes?v
 ```
 
 Expected:
@@ -441,7 +445,7 @@ docker exec wazuh.dashboard env | grep -E "DASHBOARD_USERNAME|DASHBOARD_PASSWORD
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 # → 200 OK = correct password, variable injection issue → fix --env-file
 # → 401 = incorrect password → see Secret Rotation Guide
 ```
@@ -656,11 +660,91 @@ echo "Token: $TOKEN"
 
 ---
 
+## Case 6 — Worker Missing from `cluster_control -l`
+
+### Symptom
+
+The worker container reports `Up` and stays running, with no crash and no obvious error in its logs — but it never appears in the cluster node list:
+
+```bash
+MASTER=$(docker ps --filter "name=wazuh.master" --format '{{.Names}}' | head -1)
+docker exec "$MASTER" /var/ossec/bin/cluster_control -l
+```
+
+```
+NAME           TYPE     VERSION   ADDRESS
+wazuh.master   master   4.14.5    wazuh.master
+```
+
+Only the master is listed. The worker is silently missing.
+
+### Cause
+
+This is a configuration-sharing mistake, not a network or container failure: the worker is mounting **`wazuh_manager.conf`** instead of its own **`wazuh_worker.conf`**. Because that file declares `<node_type>master</node_type>` and the master's `<node_name>`, the worker container believes it **is** the master — under the same node name — so it never attempts to register as a worker against the real master. Nothing crashes because, from the worker's own point of view, it started up correctly as a (duplicate) master.
+
+### Diagnosis
+
+Confirm the worker's actual cluster configuration:
+
+```bash
+docker exec wazuh.worker grep -A 5 "<cluster>" /wazuh-config-mount/etc/ossec.conf
+```
+
+If this shows `<node_type>master</node_type>`, the worker is using the wrong file.
+
+### Resolution
+
+1. Verify a separate `wazuh_worker.conf` exists in `config/wazuh_cluster/` (the official `wazuh-docker` multi-node repository ships this file by default, alongside `wazuh_manager.conf`).
+
+2. Confirm its `<cluster>` block has:
+   - `<node_type>worker</node_type>`
+   - a `<node_name>` different from the master's
+   - the **same** `<key>` as the master (this is what authenticates the worker to the cluster — a mismatch here also produces a silent non-join, not an error)
+   - the master's address, so the worker knows where to connect
+
+3. Update the bind mount for the `wazuh.worker` service in `docker-compose.yml`:
+
+   ```yaml
+   # Before (incorrect — causes this issue)
+   - .../wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+
+   # After (correct)
+   - .../wazuh_cluster/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf
+   ```
+
+4. Redeploy (Dokploy Deploy/Redeploy — `docker restart` does not re-read the bind-mounted file content reliably for this purpose).
+
+5. Re-validate:
+
+   ```bash
+   docker exec "$MASTER" /var/ossec/bin/cluster_control -l
+   ```
+
+   Expected — both nodes listed:
+
+   ```
+   NAME           TYPE     VERSION   ADDRESS
+   wazuh.master   master   4.14.5    wazuh.master
+   worker01       worker   4.14.5    wazuh.worker
+   ```
+
+6. Re-confirm Filebeat still reaches the indexer cluster after the change:
+
+   ```bash
+   docker exec wazuh.worker filebeat test output
+   # Expected: talk to server... OK
+   ```
+
+> [!CAUTION] This is the same class of failure as the factory-credentials trap: the stack looks healthy (container `Up`, no errors) while a core piece of the architecture — manager clustering — silently isn't working. Always validate with `cluster_control -l`, not just `docker ps`.
+
+---
+
 ## Summary Table
 
 |Symptom|Layer|Quick Check|Action|
 |---|---|---|---|
 |Factory password returns 200|Credentials|Health Check — Check 0|Rotate hash + plaintext|
+|Worker missing from cluster_control -l|Manager clustering|`cluster_control -l`|Mount `wazuh_worker.conf`, not `wazuh_manager.conf`, on the worker|
 |502 Bad Gateway|Traefik|`docker logs traefik`|Verify backend connectivity|
 |Dashboard unavailable|Dashboard|`curl localhost:5601`|Review Dashboard logs|
 |ERROR 3099|Dashboard / API|`curl localhost:55000`|Verify API and credentials|

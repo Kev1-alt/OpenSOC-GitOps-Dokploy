@@ -531,13 +531,39 @@ volumes:
 ### Manager and Worker volume mounts
 
 ```yaml
-# wazuh.master and wazuh.worker — SSL certs for Filebeat
+# wazuh.master — uses wazuh_manager.conf (node_type: master)
 volumes:
   - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
   - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.master.pem:/etc/ssl/filebeat.pem
   - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.master-key.pem:/etc/ssl/filebeat.key
   - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
 ```
+
+```yaml
+# wazuh.worker — uses wazuh_worker.conf (node_type: worker), NOT wazuh_manager.conf
+volumes:
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.worker.pem:/etc/ssl/filebeat.pem
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.worker-key.pem:/etc/ssl/filebeat.key
+  - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf
+```
+
+> [!CAUTION] **Never mount `wazuh_manager.conf` on the worker**
+>
+> Mounting the same `wazuh_manager.conf` on both master and worker gives the worker `<node_type>master</node_type>` and the same `<node_name>` as the real master. The worker container starts and runs normally — no crash, no error in the logs — but it never registers as a worker in the cluster. `cluster_control -l` run from the master will show only one node.
+>
+> `wazuh_worker.conf` must exist as a **separate file** with:
+> - `<node_type>worker</node_type>`
+> - a `<node_name>` different from the master's
+> - the **same** `<key>` as the master's cluster key
+> - the master's address so the worker knows where to connect
+>
+> Validate after deploying:
+> ```bash
+> MASTER=$(docker ps --filter "name=wazuh.master" --format '{{.Names}}' | head -1)
+> docker exec "$MASTER" /var/ossec/bin/cluster_control -l
+> # Expected: both wazuh.master AND the worker node listed
+> ```
 
 ### Dashboard volume mounts
 
@@ -753,7 +779,7 @@ Wait for the cluster to report `green` before initializing the security plugin:
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty | grep -E "cluster_name|status"
+  https://wazuh1.indexer:9200/_cluster/health?pretty | grep -E "cluster_name|status"
 # Expected: "status" : "green"
 ```
 
@@ -797,13 +823,13 @@ Expected output: `Done with success`
 > # 1. The NEW password must authenticate → HTTP 200
 > docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
 >   -u admin:<NEW_INDEXER_PASSWORD> \
->   https://localhost:9200/_cluster/health
+>   https://wazuh1.indexer:9200/_cluster/health
 > # Expected: 200
 > 
 > # 2. The FACTORY password must be rejected → HTTP 401
 > docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
 >   -u admin:SecretPassword \
->   https://localhost:9200/_cluster/health
+>   https://wazuh1.indexer:9200/_cluster/health
 > # Expected: 401  →  a 200 here means the factory credential is still live (critical)
 > ```
 > 
@@ -849,7 +875,7 @@ See [Health Check Guide](04-health-check.md) for the complete validation procedu
 ```bash
 docker exec wazuh1.indexer curl -k \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 ```
 
 Expected:

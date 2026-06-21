@@ -126,6 +126,7 @@ The deployment is considered healthy when all of the following conditions are me
 
 - Factory/default credentials are rejected (`401`) — **see Check 0**
 - All containers report `Up` status
+- Worker has joined the manager cluster (`cluster_control -l` shows both nodes) — **see Check 1bis**
 - OpenSearch cluster status is `green`
 - All 3 indexer nodes are present
 - All shards are in `STARTED` state
@@ -155,7 +156,7 @@ Each factory credential **must be rejected**. A `200` (or a valid token) is a **
 # 1. Indexer admin — factory value must return 401
 docker exec wazuh1.indexer curl -k -s -o /dev/null -w "%{http_code}\n" \
   -u admin:SecretPassword \
-  https://localhost:9200/_cluster/health
+  https://wazuh1.indexer:9200/_cluster/health
 # Expected: 401   (200 = factory credential still live → CRITICAL)
 
 # 2. Wazuh API — factory value must return 401
@@ -195,12 +196,38 @@ docker ps --format "table {{.Names}}\t{{.Status}}" | grep -E "wazuh|Restarting"
 
 ---
 
+## Check 1bis — Manager Cluster Membership (Worker Joined)
+
+A running worker container does not guarantee it has actually joined the Wazuh manager cluster. A misconfigured worker starts cleanly, reports `Up`, and produces no error — while remaining invisible to the cluster.
+
+```bash
+MASTER=$(docker ps --filter "name=wazuh.master" --format '{{.Names}}' | head -1)
+docker exec "$MASTER" /var/ossec/bin/cluster_control -l
+```
+
+Expected result — **both** nodes listed:
+
+```
+NAME           TYPE     VERSION   ADDRESS
+wazuh.master   master   4.14.5    wazuh.master
+worker01       worker   4.14.5    wazuh.worker
+```
+
+| Result | Interpretation | Action |
+|---|---|---|
+| Both nodes listed | Cluster healthy | ✅ Continue |
+| Only the master listed | Worker did not join — likely mounting `wazuh_manager.conf` instead of `wazuh_worker.conf` | [Troubleshooting — Case 6](03-troubleshooting.md) |
+
+> [!CAUTION] This check exists because `docker ps` alone cannot detect this failure mode — the worker container is healthy at the Docker level while being completely absent from the Wazuh cluster at the application level.
+
+---
+
 ## Check 2 — OpenSearch Cluster Health
 
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty
+  https://wazuh1.indexer:9200/_cluster/health?pretty
 ```
 
 Expected result:
@@ -228,7 +255,7 @@ Verify that all three indexer nodes have joined the cluster.
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cat/nodes?v
+  https://wazuh1.indexer:9200/_cat/nodes?v
 ```
 
 Expected result: three nodes listed — `wazuh1.indexer`, `wazuh2.indexer`, `wazuh3.indexer`.
@@ -244,7 +271,7 @@ Verify that all shards are properly allocated and no unassigned shards remain.
 ```bash
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cat/shards?v | grep -v STARTED
+  https://wazuh1.indexer:9200/_cat/shards?v | grep -v STARTED
 ```
 
 Expected result: no output — all shards in `STARTED` state.
@@ -253,7 +280,7 @@ Expected result: no output — all shards in `STARTED` state.
 # Count unassigned shards
 docker exec wazuh1.indexer curl -k -s \
   -u admin:<INDEXER_PASSWORD> \
-  https://localhost:9200/_cluster/health?pretty | grep unassigned_shards
+  https://wazuh1.indexer:9200/_cluster/health?pretty | grep unassigned_shards
 # Expected: "unassigned_shards": 0
 ```
 
@@ -363,6 +390,7 @@ Verify the following:
 | Symptom                       | Possible Cause                                 | Next Step                                                   |
 | ----------------------------- | ---------------------------------------------- | ----------------------------------------------------------- |
 | Factory password returns 200  | Credential hash never rotated                  | [Secret Rotation Guide](02-secret-rotation.md)              |
+| Worker missing from cluster_control -l | Worker mounting wazuh_manager.conf instead of wazuh_worker.conf | [Troubleshooting — Case 6](03-troubleshooting.md) |
 | HTTP 502 from Traefik         | Dashboard container unavailable                | Check 1 → Check 7                                           |
 | Login failure                 | Credential mismatch                            | See [Secret Rotation Guide](02-secret-rotation.md)          |
 | Empty Dashboard / no alerts   | OpenSearch cluster not ready or Filebeat issue | Check 2 → Check 5                                           |
