@@ -283,7 +283,7 @@ config/wazuh_indexer_ssl_certs/
 **/config/wazuh_dashboard_certs/
 # internal_users.yml — real bcrypt hashes must never be committed
 config/wazuh_indexer/internal_users.yml
-
+config/wazuh_dashboard/wazuh.yml
 # Persistent data & logs
 data/
 logs/
