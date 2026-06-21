@@ -93,7 +93,7 @@ services:
       - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/root-ca-manager.pem:/etc/ssl/root-ca.pem
       - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.worker.pem:/etc/ssl/filebeat.pem
       - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_indexer_ssl_certs/wazuh.worker-key.pem:/etc/ssl/filebeat.key
-      - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/wazuh_manager.conf:/wazuh-config-mount/etc/ossec.conf
+      - /home/user/OpenSOC-GitOps-Dokploy/01-Wazuh-Stack/wazuh-docker/config/wazuh_cluster/wazuh_worker.conf:/wazuh-config-mount/etc/ossec.conf
 
 
   wazuh1.indexer:

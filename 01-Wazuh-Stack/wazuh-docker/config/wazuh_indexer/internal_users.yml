@@ -1,0 +1,28 @@
+---
+# This is the internal user database
+# The hash value is a bcrypt hash and can be generated with plugins/opensearch-security/tools/hash.sh
+_meta:
+  type: "internalusers"
+  config_version: 2
+
+# ============================================================
+# admin — primary OpenSearch administrator
+# Used by: Wazuh Manager (master/worker) ↔ Indexer authentication
+# Hash must match INDEXER_PASSWORD in wazuh.env
+# ============================================================
+admin:
+  hash: "<GENERATE_VIA_hash.sh__SEE_DEPLOYMENT_GUIDE_STEP_2.3>"
+  reserved: true
+  backend_roles:
+  - "admin"
+  description: "OpenSearch administrator — rotate before any deployment"
+
+# ============================================================
+# kibanaserver — Dashboard ↔ Indexer service account
+# Used by: wazuh.dashboard via opensearch_dashboards.yml (literal value, NOT env-injected)
+# Hash must match the literal opensearch.password set in opensearch_dashboards.yml
+# ============================================================
+kibanaserver:
+  hash: "<GENERATE_VIA_hash.sh__SEE_DEPLOYMENT_GUIDE_STEP_2.3>"
+  reserved: true
+  description: "Dashboard service account — must match opensearch_dashboards.yml"
